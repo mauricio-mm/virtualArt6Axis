@@ -1,6 +1,6 @@
 import { createCollapsibleSection } from "./ui-utils.js";
 
-export function createMqttPanel({ onConnectionChange }) {
+export function createMqttPanel({ onConnectionChange, onMessage }) {
   const form = document.querySelector("#mqtt-content");
   const connectButton = document.querySelector("#mqtt-connect");
   const status = document.querySelector("#mqtt-status");
@@ -121,6 +121,21 @@ export function createMqttPanel({ onConnectionChange }) {
     eventSource.addEventListener("mqtt-log", (event) => {
       const data = JSON.parse(event.data);
       appendLog(data.type, data.message);
+
+      if (data.type === "in" && data.topic && Object.hasOwn(data, "payload")) {
+        try {
+          const result = onMessage?.({
+            payload: data.payload,
+            topic: data.topic,
+          });
+
+          if (result?.message) {
+            appendLog(result.type || "muted", result.message);
+          }
+        } catch (error) {
+          appendLog("error", error.message);
+        }
+      }
 
       if (data.state === "connected") {
         isConnected = true;

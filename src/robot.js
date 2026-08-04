@@ -7,15 +7,28 @@ import {
   threeToDh,
   workspaceRadius,
 } from "./kinematics.js";
+import { applyForwardKinematicsAngles } from "./forward-kinematics.js";
 
 const jointRadius = 0.13;
 const endEffectorRadius = 0.2;
+const defaultMotionDuration = 1.2;
+
+function easeInOutCubic(value) {
+  return value < 0.5 ? 4 * value * value * value : 1 - (-2 * value + 2) ** 3 / 2;
+}
+
+function shortestAngleTarget(current, target) {
+  const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
+
+  return current + delta;
+}
 
 export class RobotArm {
   constructor() {
     this.group = new THREE.Group();
     this.joints = createJointState();
     this.kinematics = computeForwardKinematics(this.joints);
+    this.motion = null;
     this.targetActive = false;
     this.targetPosition = dhToThree(this.kinematics.endPosition);
 
@@ -82,6 +95,7 @@ export class RobotArm {
 
   activateTarget() {
     if (!this.targetActive) {
+      this.motion = null;
       this.targetPosition.copy(this.getEndEffectorPosition());
       this.targetActive = true;
       this.target.visible = true;
@@ -132,16 +146,78 @@ export class RobotArm {
     this.workspace.visible = isVisible;
   }
 
+  setJointAnglesDegrees(anglesDegrees, options = {}) {
+    this.targetActive = false;
+    this.target.visible = false;
+
+    const animate = options.animate ?? true;
+    const duration = options.duration ?? defaultMotionDuration;
+
+    if (!animate || duration <= 0) {
+      this.motion = null;
+      this.kinematics = applyForwardKinematicsAngles(this.joints, anglesDegrees);
+      this.updateVisuals();
+      return;
+    }
+
+    const startAngles = this.joints.map((joint) => joint.thetaRad);
+    const targetAngles = this.joints.map((joint, index) => {
+      const angleDeg = anglesDegrees[index];
+
+      if (!Number.isFinite(angleDeg)) {
+        return joint.thetaRad;
+      }
+
+      return shortestAngleTarget(joint.thetaRad, THREE.MathUtils.degToRad(angleDeg));
+    });
+
+    this.motion = {
+      duration,
+      elapsed: 0,
+      startAngles,
+      targetAngles,
+    };
+  }
+
   setTargetPosition(position) {
+    this.motion = null;
     this.activateTarget();
     this.targetPosition.copy(position);
     this.target.position.copy(position);
   }
 
   solveToTarget() {
+    this.motion = null;
     this.activateTarget();
     this.kinematics = solveIk(this.joints, threeToDh(this.targetPosition));
     this.updateVisuals();
+  }
+
+  updateMotion(deltaTime) {
+    if (!this.motion) {
+      return false;
+    }
+
+    this.motion.elapsed = Math.min(this.motion.elapsed + deltaTime, this.motion.duration);
+
+    const progress = this.motion.duration > 0 ? this.motion.elapsed / this.motion.duration : 1;
+    const easedProgress = easeInOutCubic(progress);
+
+    this.joints.forEach((joint, index) => {
+      const start = this.motion.startAngles[index];
+      const target = this.motion.targetAngles[index];
+      joint.thetaRad = THREE.MathUtils.lerp(start, target, easedProgress);
+    });
+
+    if (progress >= 1) {
+      this.joints.forEach((joint, index) => {
+        joint.thetaRad = this.motion.targetAngles[index];
+      });
+      this.motion = null;
+    }
+
+    this.updateVisuals();
+    return true;
   }
 
   updateVisuals() {

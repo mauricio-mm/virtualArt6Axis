@@ -24,6 +24,11 @@ function render(time = 0) {
   previousTime = time;
 
   controls.update(deltaTime);
+
+  if (robotScene.robot.updateMotion(deltaTime)) {
+    ui.updateRobot();
+  }
+
   robotScene.renderer.render(robotScene.scene, robotScene.camera);
   requestAnimationFrame(render);
 }

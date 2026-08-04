@@ -31,8 +31,8 @@ function sendJson(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
-function broadcastMqttLog(type, message, state = mqttState) {
-  const payload = JSON.stringify({ message, state, type });
+function broadcastMqttLog(type, message, state = mqttState, data = {}) {
+  const payload = JSON.stringify({ ...data, message, state, type });
 
   console.log(`[mqtt:${type}] ${message}`);
 
@@ -131,7 +131,12 @@ function connectMqtt(config) {
   });
 
   mqttClient.on("message", (topic, payload) => {
-    broadcastMqttLog("in", `RX ${topic}: ${payload.toString()}`, mqttState);
+    const textPayload = payload.toString();
+
+    broadcastMqttLog("in", `RX ${topic}: ${textPayload}`, mqttState, {
+      payload: textPayload,
+      topic,
+    });
   });
 
   mqttClient.on("error", (error) => {
@@ -216,7 +221,10 @@ async function handleMqttApi(request, response, requestUrl) {
           return;
         }
 
-        broadcastMqttLog("out", `TX ${topic}: ${payload}`, mqttState);
+        broadcastMqttLog("out", `TX ${topic}: ${payload}`, mqttState, {
+          payload,
+          topic,
+        });
       });
 
       sendJson(response, 202, { state: mqttState, topic });

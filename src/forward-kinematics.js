@@ -1,5 +1,7 @@
 import { computeForwardKinematics, createJointState, dhToThree } from "./kinematics.js";
 
+const DEG_TO_RAD = Math.PI / 180;
+
 function matrixToRows(matrix) {
   return [
     matrix.slice(0, 4),
@@ -26,6 +28,18 @@ export function calculateForwardKinematics(joints = createJointState()) {
     positionsDh: state.positions,
     positionsThree,
   };
+}
+
+export function applyForwardKinematicsAngles(joints, anglesDegrees) {
+  anglesDegrees.forEach((angleDeg, index) => {
+    if (!joints[index] || !Number.isFinite(angleDeg)) {
+      return;
+    }
+
+    joints[index].thetaRad = angleDeg * DEG_TO_RAD;
+  });
+
+  return computeForwardKinematics(joints);
 }
 
 export function getEndEffectorPose(joints = createJointState()) {

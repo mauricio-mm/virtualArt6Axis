@@ -10,8 +10,20 @@ export function formatAngle(value) {
   return `${value.toFixed(1)} deg`;
 }
 
+export function formatDistanceMm(value) {
+  if (Math.abs(value) < 0.05) {
+    return "0.0 mm";
+  }
+
+  return `${value.toFixed(1)} mm`;
+}
+
 export function formatPosition(vector) {
   return `${formatNumber(vector.x)}, ${formatNumber(vector.y)}, ${formatNumber(vector.z)}`;
+}
+
+export function formatPositionMm(vector) {
+  return `${formatDistanceMm(vector.x)}, ${formatDistanceMm(vector.y)}, ${formatDistanceMm(vector.z)}`;
 }
 
 export function createCollapsibleSection(panelSelector, toggleSelector) {

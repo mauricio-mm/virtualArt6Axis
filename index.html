@@ -11,16 +11,6 @@
       <canvas id="scene" aria-label="Cena 3D do braco robotico"></canvas>
 
       <aside class="control-display" aria-label="Controles do robo">
-        <section class="display-section workspace-section" aria-label="Area de trabalho">
-          <div class="section-title-row">
-            <span>Area de trabalho</span>
-            <span id="workspace-state" class="section-status">Oculta</span>
-          </div>
-          <button id="workspace-toggle" class="control-button" type="button" aria-pressed="false">
-            Mostrar area de trabalho
-          </button>
-        </section>
-
         <section
           id="dh-panel"
           class="display-section collapsible-section is-collapsed"
@@ -66,29 +56,20 @@
           <form id="mqtt-content" class="section-content mqtt-form">
             <label class="form-field">
               <span>Broker</span>
-              <input id="mqtt-host" type="text" value="localhost" autocomplete="off" />
+              <input id="mqtt-host" type="text" value="broker.emqx.io" autocomplete="off" />
             </label>
 
             <div class="form-grid">
               <label class="form-field">
                 <span>Protocolo</span>
-                <select id="mqtt-protocol">
-                  <option value="ws">ws</option>
-                  <option value="wss">wss</option>
-                  <option value="mqtt">mqtt</option>
-                </select>
+                <input id="mqtt-protocol" type="text" value="mqtt" readonly />
               </label>
 
               <label class="form-field">
                 <span>Porta</span>
-                <input id="mqtt-port" type="number" value="9001" min="1" max="65535" />
+                <input id="mqtt-port" type="number" value="1883" min="1" max="65535" />
               </label>
             </div>
-
-            <label class="form-field">
-              <span>Path WebSocket</span>
-              <input id="mqtt-path" type="text" value="/mqtt" autocomplete="off" />
-            </label>
 
             <label class="form-field">
               <span>Client ID</span>
@@ -117,12 +98,30 @@
               <input id="mqtt-command-topic" type="text" value="robot/command" autocomplete="off" />
             </label>
 
+            <section class="mqtt-publish-panel" aria-label="Publicar MQTT">
+              <label class="form-field">
+                <span>Payload para publicar</span>
+                <textarea id="mqtt-publish-payload" rows="4">{ "msg": "hello" }</textarea>
+              </label>
+              <button id="mqtt-publish" class="control-button" type="button" disabled>Publicar</button>
+            </section>
+
             <div class="mqtt-actions">
               <button id="mqtt-connect" class="control-button" type="submit">
-                Conectar MQTT para habilitar
+                Conectar MQTT
               </button>
               <span id="mqtt-status" class="section-status">Desconectado</span>
             </div>
+
+            <section class="mqtt-log-panel" aria-label="Log MQTT">
+              <div class="section-title-row">
+                <span>Log MQTT</span>
+                <button id="mqtt-clear-log" class="text-button" type="button">Limpar</button>
+              </div>
+              <div id="mqtt-log" class="mqtt-log" aria-live="polite">
+                <div class="mqtt-log-line muted">Aguardando conexao MQTT.</div>
+              </div>
+            </section>
           </form>
         </section>
       </aside>

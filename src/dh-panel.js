@@ -1,4 +1,10 @@
-import { createCollapsibleSection, formatAngle, formatNumber, formatPosition } from "./ui-utils.js";
+import {
+  createCollapsibleSection,
+  formatAngle,
+  formatDistanceMm,
+  formatNumber,
+  formatPositionMm,
+} from "./ui-utils.js";
 
 function matrixCells(matrix) {
   return matrix.map((value) => `<span>${formatNumber(value)}</span>`).join("");
@@ -14,7 +20,7 @@ export function createDhPanel() {
     const robotStatus = robot.getStatus();
     const mode = robotStatus.targetActive ? "IK ativo" : "IK em espera";
 
-    status.textContent = `${mode} | terminal ${formatPosition(robotStatus.end)} | erro ${formatNumber(robotStatus.error)}`;
+    status.textContent = `${mode} | terminal ${formatPositionMm(robotStatus.endMm)} | erro ${formatDistanceMm(robotStatus.errorMm)}`;
 
     list.innerHTML = robot
       .getMatrixRows()
@@ -33,11 +39,11 @@ export function createDhPanel() {
               </div>
               <div>
                 <span class="param-label">d</span>
-                <span class="param-value">${formatNumber(joint.d)}</span>
+                <span class="param-value">${formatDistanceMm(joint.d)}</span>
               </div>
               <div>
                 <span class="param-label">a</span>
-                <span class="param-value">${formatNumber(joint.a)}</span>
+                <span class="param-value">${formatDistanceMm(joint.a)}</span>
               </div>
               <div>
                 <span class="param-label">alpha</span>

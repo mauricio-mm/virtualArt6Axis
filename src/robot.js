@@ -60,6 +60,7 @@ export class RobotArm {
       })
     );
     this.workspace.name = "workspace";
+    this.workspace.visible = false;
 
     this.target = new THREE.Mesh(
       new THREE.SphereGeometry(0.15, 24, 16),
@@ -111,12 +112,18 @@ export class RobotArm {
   getStatus() {
     const end = this.getEndEffectorPosition();
     const target = this.targetPosition;
+    const endMm = this.kinematics.endPosition.clone();
+    const targetMm = threeToDh(target);
     const error = this.targetActive ? end.distanceTo(target) : 0;
+    const errorMm = this.targetActive ? endMm.distanceTo(targetMm) : 0;
 
     return {
       end,
+      endMm,
       error,
+      errorMm,
       target,
+      targetMm,
       targetActive: this.targetActive,
     };
   }

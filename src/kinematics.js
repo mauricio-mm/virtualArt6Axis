@@ -2,17 +2,23 @@ import * as THREE from "../node_modules/three/build/three.module.js";
 
 const DEG_TO_RAD = Math.PI / 180;
 const identityMatrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-export const linkLength = 1.1;
-export const workspaceRadius = linkLength * 6;
+export const DH_TO_THREE_SCALE = 0.01;
+export const THREE_TO_DH_SCALE = 1 / DH_TO_THREE_SCALE;
 
 export const dhDefinitions = [
-  { name: "J1", theta: 35, d: linkLength, a: 0.0, alpha: 90, min: -180, max: 180 },
-  { name: "J2", theta: -35, d: 0.0, a: linkLength, alpha: 0, min: -130, max: 130 },
-  { name: "J3", theta: 65, d: 0.0, a: linkLength, alpha: 0, min: -150, max: 150 },
-  { name: "J4", theta: -30, d: 0.0, a: linkLength, alpha: 90, min: -180, max: 180 },
-  { name: "J5", theta: 40, d: 0.0, a: linkLength, alpha: -90, min: -130, max: 130 },
-  { name: "J6", theta: 10, d: 0.0, a: linkLength, alpha: 0, min: -180, max: 180 },
+  { name: "J1", theta: 0, d: 0.0, a: 0.0, alpha: 0, min: -180, max: 180 },
+  { name: "J2", theta: 0, d: 229.4, a: 0.0, alpha: 90, min: -180, max: 180 },
+  { name: "J3", theta: 0, d: 0.0, a: 250.2, alpha: 0, min: -180, max: 180 },
+  { name: "J4", theta: 0, d: 252.5, a: 0.0, alpha: 90, min: -180, max: 180 },
+  { name: "J5", theta: 0, d: 158.9, a: 0.0, alpha: 90, min: -180, max: 180 },
+  { name: "J6", theta: 0, d: 152.0, a: 0.0, alpha: 90, min: -180, max: 180 },
 ];
+
+export const workspaceRadiusMm = dhDefinitions.reduce(
+  (radius, joint) => radius + Math.hypot(joint.d, joint.a),
+  0
+);
+export const workspaceRadius = workspaceRadiusMm * DH_TO_THREE_SCALE;
 
 export function createJointState() {
   return dhDefinitions.map((joint) => ({
@@ -25,11 +31,19 @@ export function createJointState() {
 }
 
 export function dhToThree(vector) {
-  return new THREE.Vector3(vector.x, vector.z, vector.y);
+  return new THREE.Vector3(
+    vector.x * DH_TO_THREE_SCALE,
+    vector.z * DH_TO_THREE_SCALE,
+    vector.y * DH_TO_THREE_SCALE
+  );
 }
 
 export function threeToDh(vector) {
-  return new THREE.Vector3(vector.x, vector.z, vector.y);
+  return new THREE.Vector3(
+    vector.x * THREE_TO_DH_SCALE,
+    vector.z * THREE_TO_DH_SCALE,
+    vector.y * THREE_TO_DH_SCALE
+  );
 }
 
 export function createDhMatrix(theta, d, a, alpha) {
@@ -99,7 +113,7 @@ export function computeForwardKinematics(joints) {
 
 export function solveIk(joints, target, options = {}) {
   const iterations = options.iterations ?? 28;
-  const tolerance = options.tolerance ?? 0.03;
+  const tolerance = options.tolerance ?? 2;
   const maxStep = options.maxStep ?? 0.28;
   const workingTarget = target.clone();
 

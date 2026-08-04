@@ -64,8 +64,10 @@ body {
 
 .control-button,
 .panel-toggle,
+.text-button,
 input,
-select {
+select,
+textarea {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
   background: rgba(10, 12, 14, 0.72);
@@ -74,7 +76,8 @@ select {
 }
 
 .control-button,
-.panel-toggle {
+.panel-toggle,
+.text-button {
   cursor: pointer;
 }
 
@@ -92,8 +95,15 @@ select {
 }
 
 .control-button:not(:disabled):hover,
-.panel-toggle:hover {
+.panel-toggle:hover,
+.text-button:hover {
   background: rgba(29, 34, 40, 0.94);
+}
+
+.text-button {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 .section-header {
@@ -219,15 +229,32 @@ select {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
-  min-height: 34px;
   padding: 0 10px;
 }
 
+input,
+select {
+  min-height: 34px;
+}
+
+textarea {
+  min-height: 86px;
+  padding: 10px;
+  resize: vertical;
+}
+
 input:disabled,
-select:disabled {
+select:disabled,
+textarea:disabled {
   opacity: 0.72;
+}
+
+.mqtt-publish-panel {
+  display: grid;
+  gap: 10px;
 }
 
 .mqtt-actions {
@@ -240,6 +267,46 @@ select:disabled {
 .mqtt-actions .section-status {
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.mqtt-log-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.mqtt-log {
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(10, 12, 14, 0.72);
+  padding: 10px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+
+.mqtt-log-line {
+  overflow-wrap: anywhere;
+  color: #edf1f5;
+}
+
+.mqtt-log-line.muted {
+  color: #aeb8c4;
+}
+
+.mqtt-log-line.in {
+  color: #8ee6d2;
+}
+
+.mqtt-log-line.out {
+  color: #ffd27a;
+}
+
+.mqtt-log-line.error {
+  color: #ff9f9f;
 }
 
 @media (max-width: 760px) {

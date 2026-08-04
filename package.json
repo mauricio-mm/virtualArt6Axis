@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "vite --host 127.0.0.1",
+    "dev": "node server.js",
     "build": "vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "node server.js"
   },
   "dependencies": {
+    "mqtt": "^5.15.2",
     "three": "^0.160.0"
   },
   "devDependencies": {

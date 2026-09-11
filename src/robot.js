@@ -14,9 +14,13 @@ const jointRadius = 0.13;
 const endEffectorRadius = 0.2;
 const defaultMotionDuration = 1.2;
 const modelFiles = [
-  { fileName: "base.glb", startIndex: null, endIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
-  { fileName: "art1.glb", startIndex: 0, endIndex: 2, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
-  { fileName: "art2.glb", startIndex: 2, endIndex: 3, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
+  { fileName: "base.glb", startIndex: null, endIndex: null, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
+  { fileName: "art1.glb", startIndex: 0, endIndex: 2, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
+  { fileName: "art2.glb", startIndex: 2, endIndex: 3, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
+  { fileName: "art3.glb", startIndex: 3, endIndex: 4, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
+  { fileName: "art4.glb", startIndex: 4, endIndex: 5, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
+  { fileName: "art5.glb", startIndex: 5, endIndex: 6, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
+  { fileName: "orgaoterminal.glb", startIndex: null, endIndex: null, pointIndex: 6, visualScale: 1, scaleOffset: { x: 1, y: 1, z: 1 } },
 ];
 
 function easeInOutCubic(value) {
@@ -296,7 +300,7 @@ export class RobotArm {
   }
 
   updateModelTransforms() {
-    modelFiles.forEach(({ fileName, startIndex, endIndex, visualScale, scaleOffset }) => {
+    modelFiles.forEach(({ fileName, startIndex, endIndex, pointIndex, visualScale, scaleOffset }) => {
       const instance = this.loadedModels.get(fileName);
 
       if (!instance) {
@@ -304,7 +308,9 @@ export class RobotArm {
       }
 
       if (startIndex === null || endIndex === null) {
-        instance.model.position.set(0, 0, 0);
+        const point = pointIndex === null ? null : this.kinematics?.positions[pointIndex];
+
+        instance.model.position.copy(point ? dhToThree(point) : new THREE.Vector3());
         instance.model.rotation.set(0, 0, 0);
         instance.model.scale.set(
           visualScale * scaleOffset.x,

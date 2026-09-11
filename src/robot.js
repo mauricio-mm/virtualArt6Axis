@@ -13,21 +13,10 @@ import { applyForwardKinematicsAngles } from "./forward-kinematics.js";
 const jointRadius = 0.13;
 const endEffectorRadius = 0.2;
 const defaultMotionDuration = 1.2;
-<<<<<<< HEAD
 const modelFiles = [
   { fileName: "base.glb", startIndex: null, endIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
   { fileName: "art1.glb", startIndex: 0, endIndex: 2, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
   { fileName: "art2.glb", startIndex: 2, endIndex: 3, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
-=======
-const modelDefinitions = [
-  { name: "base", path: "./src/models/base.glb", pointIndex: 0, matrixIndex: null },
-  { name: "art1", path: "./src/models/art1.glb", pointIndex: 0, matrixIndex: 0 },
-  { name: "art2", path: "./src/models/art2.glb", pointIndex: 1, matrixIndex: 1 },
-  { name: "art3", path: "./src/models/art3.glb", pointIndex: 2, matrixIndex: 2 },
-  { name: "art4", path: "./src/models/art4.glb", pointIndex: 3, matrixIndex: 3 },
-  { name: "art5", path: "./src/models/art5.glb", pointIndex: 4, matrixIndex: 4 },
-  { name: "orgaoterminal", path: "./src/models/orgaoterminal.glb", pointIndex: 5, matrixIndex: 5 },
->>>>>>> 548d1996ef77fea3e494a7b357dd7e1d39404793
 ];
 
 function easeInOutCubic(value) {
@@ -38,15 +27,6 @@ function shortestAngleTarget(current, target) {
   const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
 
   return current + delta;
-}
-
-function dhMatrixToThree(matrix) {
-  return new THREE.Matrix4().set(
-    matrix[0], matrix[2], matrix[1], matrix[3],
-    matrix[8], matrix[10], matrix[9], matrix[11],
-    matrix[4], matrix[6], matrix[5], matrix[7],
-    0, 0, 0, 1
-  );
 }
 
 export class RobotArm {
@@ -60,9 +40,6 @@ export class RobotArm {
     this.motion = null;
     this.targetActive = false;
     this.targetPosition = dhToThree(this.kinematics.endPosition);
-    this.models = new THREE.Group();
-    this.models.name = "robotModels";
-    this.modelLoader = new GLTFLoader();
 
     this.linkGeometry = new THREE.BufferGeometry();
     this.link = new THREE.Line(
@@ -121,41 +98,9 @@ export class RobotArm {
     this.target.userData.role = "ikTarget";
     this.target.visible = false;
 
-<<<<<<< HEAD
     this.group.add(this.models, this.workspace, this.link, this.endEffector, this.target, ...this.jointMeshes);
     this.loadModels();
-=======
-    this.group.add(
-      this.models,
-      this.workspace,
-      this.link,
-      this.endEffector,
-      this.target,
-      ...this.jointMeshes
-    );
->>>>>>> 548d1996ef77fea3e494a7b357dd7e1d39404793
     this.updateVisuals();
-    this.loadModels();
-  }
-
-  loadModels() {
-    modelDefinitions.forEach(({ name, path, pointIndex, matrixIndex }) => {
-      this.modelLoader.load(
-        path,
-        (gltf) => {
-          const model = gltf.scene;
-          model.name = name;
-          model.userData.pointIndex = pointIndex;
-          model.userData.matrixIndex = matrixIndex;
-          this.models.add(model);
-          this.updateVisuals();
-        },
-        undefined,
-        (error) => {
-          console.error(`Nao foi possivel carregar o modelo ${name}.`, error);
-        }
-      );
-    });
   }
 
   loadModels() {
@@ -338,21 +283,6 @@ export class RobotArm {
 
     this.jointMeshes.forEach((mesh, index) => {
       mesh.position.copy(points[index]);
-    });
-
-    this.models.children.forEach((model) => {
-      const pointIndex = model.userData.pointIndex;
-      const matrixIndex = model.userData.matrixIndex;
-
-      model.position.copy(points[pointIndex]);
-
-      if (matrixIndex === null) {
-        model.quaternion.identity();
-        return;
-      }
-
-      const modelMatrix = dhMatrixToThree(this.kinematics.cumulativeMatrices[matrixIndex]);
-      model.quaternion.setFromRotationMatrix(modelMatrix);
     });
 
     this.endEffector.position.copy(points[points.length - 1]);

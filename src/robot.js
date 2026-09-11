@@ -20,8 +20,20 @@ const modelFiles = [
   { fileName: "art3.glb", startIndex: 3, endIndex: 4, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
   { fileName: "art4.glb", startIndex: 4, endIndex: 5, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
   { fileName: "art5.glb", startIndex: 5, endIndex: 6, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
-  { fileName: "orgaoterminal.glb", startIndex: null, endIndex: null, pointIndex: 6, visualScale: 1, scaleOffset: { x: 1, y: 1, z: 1 } },
+  { fileName: "orgaoterminal.glb", startIndex: null, endIndex: null, pointIndex: 6, matrixIndex: 5, visualScale: 1, scaleOffset: { x: 1, y: 1, z: 1 } },
 ];
+
+function dhMatrixToThree(matrixValues) {
+  const dhToThreeBasis = new THREE.Matrix4().set(
+    1, 0, 0, 0,
+    0, 0, 1, 0,
+    0, 1, 0, 0,
+    0, 0, 0, 1
+  );
+  const dhMatrix = new THREE.Matrix4().set(...matrixValues);
+
+  return dhToThreeBasis.clone().multiply(dhMatrix).multiply(dhToThreeBasis);
+}
 
 function easeInOutCubic(value) {
   return value < 0.5 ? 4 * value * value * value : 1 - (-2 * value + 2) ** 3 / 2;
@@ -300,7 +312,7 @@ export class RobotArm {
   }
 
   updateModelTransforms() {
-    modelFiles.forEach(({ fileName, startIndex, endIndex, pointIndex, visualScale, scaleOffset }) => {
+    modelFiles.forEach(({ fileName, startIndex, endIndex, pointIndex, matrixIndex, visualScale, scaleOffset }) => {
       const instance = this.loadedModels.get(fileName);
 
       if (!instance) {
@@ -309,9 +321,14 @@ export class RobotArm {
 
       if (startIndex === null || endIndex === null) {
         const point = pointIndex === null ? null : this.kinematics?.positions[pointIndex];
+        const matrix = matrixIndex === undefined ? null : this.kinematics?.cumulativeMatrices[matrixIndex];
 
         instance.model.position.copy(point ? dhToThree(point) : new THREE.Vector3());
-        instance.model.rotation.set(0, 0, 0);
+        if (matrix) {
+          instance.model.quaternion.setFromRotationMatrix(dhMatrixToThree(matrix));
+        } else {
+          instance.model.rotation.set(0, 0, 0);
+        }
         instance.model.scale.set(
           visualScale * scaleOffset.x,
           visualScale * scaleOffset.y,

@@ -45,6 +45,36 @@ function shortestAngleTarget(current, target) {
   return current + delta;
 }
 
+function createJointLabel(label) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+
+  const context = canvas.getContext("2d");
+  context.fillStyle = "rgba(20, 25, 32, 0.9)";
+  context.beginPath();
+  context.arc(64, 64, 46, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = "#ffffff";
+  context.font = "700 44px sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(label, 64, 64);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: texture,
+      depthTest: false,
+      transparent: true,
+    })
+  );
+  sprite.scale.set(0.22, 0.22, 1);
+  sprite.renderOrder = 3;
+  return sprite;
+}
+
 export class RobotArm {
   constructor() {
     this.group = new THREE.Group();
@@ -75,6 +105,38 @@ export class RobotArm {
       });
 
       return new THREE.Mesh(geometry, material);
+    });
+
+    this.jointGizmos = this.kinematics.origins.map((_, index) => {
+      const gizmo = new THREE.Group();
+      const ringGeometry = new THREE.TorusGeometry(0.3, 0.008, 8, 64);
+      const rings = [
+        { color: 0xff3b30, rotation: [0, Math.PI / 2, 0] },
+        { color: 0x34c759, rotation: [Math.PI / 2, 0, 0] },
+        { color: 0x007aff, rotation: [0, 0, 0] },
+      ];
+
+      rings.forEach(({ color, rotation }) => {
+        const ring = new THREE.Mesh(
+          ringGeometry,
+          new THREE.MeshBasicMaterial({
+            color,
+            depthTest: false,
+            opacity: 0.9,
+            transparent: true,
+          })
+        );
+        ring.rotation.set(...rotation);
+        gizmo.add(ring);
+      });
+
+      if (index < 5) {
+        gizmo.add(createJointLabel(`J${index + 1}`));
+      }
+
+      gizmo.name = `jointGizmo${index + 1}`;
+      gizmo.renderOrder = 2;
+      return gizmo;
     });
 
     this.endEffector = new THREE.Mesh(
@@ -114,7 +176,15 @@ export class RobotArm {
     this.target.userData.role = "ikTarget";
     this.target.visible = false;
 
-    this.group.add(this.models, this.workspace, this.link, this.endEffector, this.target, ...this.jointMeshes);
+    this.group.add(
+      this.models,
+      this.workspace,
+      this.link,
+      this.endEffector,
+      this.target,
+      ...this.jointMeshes,
+      ...this.jointGizmos
+    );
     this.loadModels();
     this.updateVisuals();
   }
@@ -299,6 +369,13 @@ export class RobotArm {
 
     this.jointMeshes.forEach((mesh, index) => {
       mesh.position.copy(points[index]);
+    });
+
+    this.jointGizmos.forEach((gizmo, index) => {
+      const orientation = dhMatrixToThree(this.kinematics.cumulativeMatrices[index]);
+
+      gizmo.position.copy(dhToThree(this.kinematics.positions[index + 1]));
+      gizmo.quaternion.setFromRotationMatrix(orientation);
     });
 
     this.endEffector.position.copy(points[points.length - 1]);

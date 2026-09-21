@@ -6,9 +6,9 @@ export const DH_TO_THREE_SCALE = 0.01;
 export const THREE_TO_DH_SCALE = 1 / DH_TO_THREE_SCALE;
 
 export const dhDefinitions = [
-  { name: "J1", theta: 0, d: 0.0, a: 0.0, alpha: 0, min: -180, max: 180 },
+  { name: "J1", theta: 0, d: 0.0, a: 0.0, alpha: 0,  min: -180, max: 180 },
   { name: "J2", theta: 0, d: 229.4, a: 0.0, alpha: 90, min: -180, max: 180 },
-  { name: "J3", theta: 0, d: 0.0, a: 250.2, alpha: 0, min: -180, max: 180 },
+  { name: "J3", theta: 0, d: 0.0, a: 250.2, alpha: 0,  min: -180, max: 180 },
   { name: "J4", theta: 0, d: 252.5, a: 0.0, alpha: 90, min: -180, max: 180 },
   { name: "J5", theta: 0, d: 158.9, a: 0.0, alpha: 90, min: -180, max: 180 },
   { name: "J6", theta: 0, d: 152.0, a: 0.0, alpha: 90, min: -180, max: 180 },

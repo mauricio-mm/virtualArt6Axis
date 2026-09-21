@@ -5,30 +5,42 @@ const up = new THREE.Vector3();
 const forward = new THREE.Vector3();
 const panDelta = new THREE.Vector3();
 
-const minPolarAngle = 0.08;
-const maxPolarAngle = Math.PI - 0.08;
+const minElevation = -Math.PI / 2 + 0.08;
+const maxElevation = Math.PI / 2 - 0.08;
 const minDistance = 2.5;
 const maxDistance = 60;
 
-function applyCamera(camera, target, spherical) {
-  spherical.phi = THREE.MathUtils.clamp(spherical.phi, minPolarAngle, maxPolarAngle);
-  spherical.radius = THREE.MathUtils.clamp(spherical.radius, minDistance, maxDistance);
+function applyCamera(camera, target, orbit) {
+  orbit.elevation = THREE.MathUtils.clamp(orbit.elevation, minElevation, maxElevation);
+  orbit.radius = THREE.MathUtils.clamp(orbit.radius, minDistance, maxDistance);
 
-  camera.position.copy(target).add(new THREE.Vector3().setFromSpherical(spherical));
+  const horizontalRadius = orbit.radius * Math.cos(orbit.elevation);
+
+  camera.position.set(
+    target.x + horizontalRadius * Math.cos(orbit.azimuth),
+    target.y + horizontalRadius * Math.sin(orbit.azimuth),
+    target.z + orbit.radius * Math.sin(orbit.elevation)
+  );
   camera.lookAt(target);
   camera.updateMatrixWorld();
 }
 
-function getWorldUnitsPerPixel(camera, canvas, spherical) {
+function getWorldUnitsPerPixel(camera, canvas, orbit) {
   const fov = THREE.MathUtils.degToRad(camera.fov);
-  const visibleHeight = 2 * Math.tan(fov / 2) * spherical.radius;
+  const visibleHeight = 2 * Math.tan(fov / 2) * orbit.radius;
 
   return visibleHeight / Math.max(canvas.clientHeight, 1);
 }
 
 export function createCameraControls(camera, canvas, options = {}) {
   const target = camera.userData.target ?? new THREE.Vector3(0, 0, 0);
-  const spherical = new THREE.Spherical().setFromVector3(camera.position.clone().sub(target));
+  const offset = camera.position.clone().sub(target);
+  const radius = Math.max(offset.length(), minDistance);
+  const orbit = {
+    azimuth: Math.atan2(offset.y, offset.x),
+    elevation: Math.asin(THREE.MathUtils.clamp(offset.z / radius, -1, 1)),
+    radius,
+  };
   const pressedKeys = new Set();
   const pointer = {
     active: false,
@@ -38,13 +50,13 @@ export function createCameraControls(camera, canvas, options = {}) {
   };
 
   function rotate(deltaX, deltaY) {
-    spherical.theta -= deltaX * 0.006;
-    spherical.phi += deltaY * 0.006;
-    applyCamera(camera, target, spherical);
+    orbit.azimuth -= deltaX * 0.006;
+    orbit.elevation -= deltaY * 0.006;
+    applyCamera(camera, target, orbit);
   }
 
   function pan(deltaX, deltaY) {
-    const unitsPerPixel = getWorldUnitsPerPixel(camera, canvas, spherical);
+    const unitsPerPixel = getWorldUnitsPerPixel(camera, canvas, orbit);
 
     right.setFromMatrixColumn(camera.matrixWorld, 0);
     up.setFromMatrixColumn(camera.matrixWorld, 1);
@@ -55,7 +67,7 @@ export function createCameraControls(camera, canvas, options = {}) {
       .addScaledVector(up, deltaY * unitsPerPixel);
 
     target.add(panDelta);
-    applyCamera(camera, target, spherical);
+    applyCamera(camera, target, orbit);
   }
 
   canvas.addEventListener("pointerdown", (event) => {
@@ -108,8 +120,8 @@ export function createCameraControls(camera, canvas, options = {}) {
 
   canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
-    spherical.radius *= event.deltaY > 0 ? 1.1 : 0.9;
-    applyCamera(camera, target, spherical);
+    orbit.radius *= event.deltaY > 0 ? 1.1 : 0.9;
+    applyCamera(camera, target, orbit);
   });
 
   window.addEventListener("keydown", (event) => {
@@ -123,17 +135,17 @@ export function createCameraControls(camera, canvas, options = {}) {
   function update(deltaTime) {
     panDelta.set(0, 0, 0);
     forward.subVectors(target, camera.position);
-    forward.y = 0;
+    forward.z = 0;
 
     if (forward.lengthSq() < 0.0001) {
-      forward.set(0, 0, -1);
+      forward.set(0, 1, 0);
     } else {
       forward.normalize();
     }
 
     right.crossVectors(forward, camera.up).normalize();
 
-    const speed = 4.5 * deltaTime * Math.max(spherical.radius / 10, 0.45);
+    const speed = 4.5 * deltaTime * Math.max(orbit.radius / 10, 0.45);
 
     if (pressedKeys.has("w") || pressedKeys.has("arrowup")) {
       panDelta.addScaledVector(forward, speed);
@@ -153,11 +165,11 @@ export function createCameraControls(camera, canvas, options = {}) {
 
     if (panDelta.lengthSq() > 0) {
       target.add(panDelta);
-      applyCamera(camera, target, spherical);
+      applyCamera(camera, target, orbit);
     }
   }
 
-  applyCamera(camera, target, spherical);
+  applyCamera(camera, target, orbit);
 
   return { update };
 }

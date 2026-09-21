@@ -10,8 +10,8 @@ function addLights(scene) {
   const keyLight = new THREE.DirectionalLight(0xffffff, 1.8);
   const fillLight = new THREE.DirectionalLight(0x9fb7ff, 0.7);
 
-  keyLight.position.set(4, 8, 6);
-  fillLight.position.set(-6, 4, -4);
+  keyLight.position.set(4, -6, 8);
+  fillLight.position.set(-6, 4, 4);
   scene.add(ambientLight, keyLight, fillLight);
 }
 

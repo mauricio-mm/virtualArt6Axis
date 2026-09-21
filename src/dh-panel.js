@@ -10,6 +10,12 @@ function matrixCells(matrix) {
   return matrix.map((value) => `<span>${formatNumber(value)}</span>`).join("");
 }
 
+function formatJointCommand(joint) {
+  const command = formatAngle(joint.thetaDeg);
+
+  return joint.thetaOffsetDeg ? `${command} (offset ${formatAngle(joint.thetaOffsetDeg)})` : command;
+}
+
 export function createDhPanel() {
   const list = document.querySelector("#dh-list");
   const status = document.querySelector("#robot-status");
@@ -29,13 +35,13 @@ export function createDhPanel() {
           <section class="dh-joint">
             <div class="dh-joint-title">
               <span>${joint.name}</span>
-              <span>${formatAngle(joint.thetaDeg)}</span>
+              <span>${formatJointCommand(joint)}</span>
             </div>
 
             <div class="dh-params" aria-label="Parametros DH ${joint.name}">
               <div>
-                <span class="param-label">theta</span>
-                <span class="param-value">${formatAngle(joint.thetaDeg)}</span>
+                <span class="param-label">theta DH</span>
+                <span class="param-value">${formatAngle(joint.thetaDhDeg)}</span>
               </div>
               <div>
                 <span class="param-label">d</span>

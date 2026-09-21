@@ -3,7 +3,9 @@ import { GLTFLoader } from "../node_modules/three/examples/jsm/loaders/GLTFLoade
 import {
   computeForwardKinematics,
   createJointState,
+  dhMatrixToThree,
   dhToThree,
+  getPhysicalJointPositions,
   solveIk,
   threeToDh,
   workspaceRadius,
@@ -14,26 +16,14 @@ const jointRadius = 0.13;
 const endEffectorRadius = 0.2;
 const defaultMotionDuration = 1.2;
 const modelFiles = [
-  { fileName: "base.glb", startIndex: null, endIndex: null, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
-  { fileName: "art1.glb", startIndex: 0, endIndex: 2, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
-  { fileName: "art2.glb", startIndex: 2, endIndex: 3, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
-  { fileName: "art3.glb", startIndex: 3, endIndex: 4, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
-  { fileName: "art4.glb", startIndex: 4, endIndex: 5, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
-  { fileName: "art5.glb", startIndex: 5, endIndex: 6, pointIndex: null, visualScale: 1, scaleOffset: { x: 1, y: 1.05, z: 1 } },
-  { fileName: "orgaoterminal.glb", startIndex: null, endIndex: null, pointIndex: 6, matrixIndex: 5, visualScale: 1, scaleOffset: { x: 1, y: 1, z: 1 } },
+  { fileName: "base.glb", role: "base", visualScale: 1 },
+  { fileName: "art1.glb", jointIndex: 0, role: "link", visualScale: 1 },
+  { fileName: "art2.glb", jointIndex: 1, role: "link", visualScale: 1 },
+  { fileName: "art3.glb", jointIndex: 2, role: "link", visualScale: 1 },
+  { fileName: "art4.glb", jointIndex: 3, role: "link", visualScale: 1 },
+  { fileName: "art5.glb", jointIndex: 4, role: "link", visualScale: 1 },
+  { fileName: "orgaoterminal.glb", jointIndex: 5, role: "tool", visualScale: 1 },
 ];
-
-function dhMatrixToThree(matrixValues) {
-  const dhToThreeBasis = new THREE.Matrix4().set(
-    1, 0, 0, 0,
-    0, 0, 1, 0,
-    0, 1, 0, 0,
-    0, 0, 0, 1
-  );
-  const dhMatrix = new THREE.Matrix4().set(...matrixValues);
-
-  return dhToThreeBasis.clone().multiply(dhMatrix).multiply(dhToThreeBasis);
-}
 
 function easeInOutCubic(value) {
   return value < 0.5 ? 4 * value * value * value : 1 - (-2 * value + 2) ** 3 / 2;
@@ -83,6 +73,7 @@ export class RobotArm {
     this.loadedModels = new Map();
     this.joints = createJointState();
     this.kinematics = computeForwardKinematics(this.joints);
+    this.zeroKinematics = computeForwardKinematics(createJointState());
     this.motion = null;
     this.targetActive = false;
     this.targetPosition = dhToThree(this.kinematics.endPosition);
@@ -130,9 +121,7 @@ export class RobotArm {
         gizmo.add(ring);
       });
 
-      if (index < 5) {
-        gizmo.add(createJointLabel(`J${index + 1}`));
-      }
+      gizmo.add(createJointLabel(`J${index + 1}`));
 
       gizmo.name = `jointGizmo${index + 1}`;
       gizmo.renderOrder = 2;
@@ -189,39 +178,92 @@ export class RobotArm {
     this.updateVisuals();
   }
 
+  getPhysicalPoints(state = this.kinematics) {
+    return getPhysicalJointPositions(state).map((position) => dhToThree(position));
+  }
+
   loadModels() {
     const loader = new GLTFLoader();
+    const zeroPoints = this.getPhysicalPoints(this.zeroKinematics);
 
-    modelFiles.forEach(({ fileName }) => {
+    modelFiles.forEach((spec) => {
+      const { fileName } = spec;
+
       loader.load(
         `./src/models/${fileName}`,
         (gltf) => {
           const model = gltf.scene;
           model.name = fileName.replace(".glb", "");
-          model.matrixAutoUpdate = true;
-          model.updateMatrix();
           const bounds = new THREE.Box3().setFromObject(model);
-          const spec = modelFiles.find((item) => item.fileName === fileName);
 
-          if (spec.startIndex === null) {
-            this.loadedModels.set(fileName, { model });
+          if (spec.role === "base") {
+            model.scale.setScalar(spec.visualScale);
+            model.rotation.x = Math.PI / 2;
             this.models.add(model);
-          } else {
-            const startPivot = new THREE.Group();
-            startPivot.name = `${model.name}PivotStart`;
-            const endPivot = new THREE.Group();
-            endPivot.name = `${model.name}PivotEnd`;
-            startPivot.add(model, endPivot);
-            this.models.add(startPivot);
-            this.loadedModels.set(fileName, {
-              barLength: bounds.max.y - bounds.min.y,
-              barMinY: bounds.min.y,
-              endPivot,
-              model,
-              startPivot,
-            });
+            this.loadedModels.set(fileName, { model, role: spec.role });
+            return;
           }
 
+          const visualPivot = new THREE.Group();
+
+          visualPivot.name = `${model.name}VisualPivot`;
+          visualPivot.matrixAutoUpdate = false;
+
+          if (spec.role === "tool") {
+            const zeroWorldMatrix = dhMatrixToThree(
+              this.zeroKinematics.jointMatrices[spec.jointIndex]
+            );
+
+            zeroWorldMatrix.setPosition(zeroPoints[spec.jointIndex]);
+            model.scale.setScalar(spec.visualScale);
+            model.rotation.x = Math.PI / 2;
+            visualPivot.matrix.copy(zeroWorldMatrix);
+            visualPivot.add(model);
+            this.models.add(visualPivot);
+            this.loadedModels.set(fileName, {
+              jointIndex: spec.jointIndex,
+              model,
+              role: spec.role,
+              visualPivot,
+              zeroWorldMatrix: zeroWorldMatrix.clone(),
+            });
+            this.updateModelTransforms();
+            return;
+          }
+
+          const start = zeroPoints[spec.jointIndex];
+          const direction = zeroPoints[spec.jointIndex + 1].clone().sub(start);
+          const length = direction.length();
+          const barLength = bounds.max.y - bounds.min.y;
+
+          if (length <= 0 || barLength <= 0) {
+            console.error(`Dimensoes invalidas para posicionar ${fileName}.`);
+            return;
+          }
+
+          const scaleY = length / barLength;
+          const rotation = new THREE.Quaternion().setFromUnitVectors(
+            new THREE.Vector3(0, 1, 0),
+            direction.normalize()
+          );
+          const zeroWorldMatrix = new THREE.Matrix4().compose(
+            start,
+            rotation,
+            new THREE.Vector3(1, 1, 1)
+          );
+
+          visualPivot.matrix.copy(zeroWorldMatrix);
+          model.position.set(0, -bounds.min.y * scaleY, 0);
+          model.scale.set(spec.visualScale, scaleY, spec.visualScale);
+          visualPivot.add(model);
+          this.models.add(visualPivot);
+          this.loadedModels.set(fileName, {
+            jointIndex: spec.jointIndex,
+            model,
+            role: spec.role,
+            visualPivot,
+            zeroWorldMatrix: zeroWorldMatrix.clone(),
+          });
           this.updateModelTransforms();
         },
         undefined,
@@ -259,6 +301,8 @@ export class RobotArm {
       matrix: this.kinematics.localMatrices[index],
       name: joint.name,
       thetaDeg: THREE.MathUtils.radToDeg(joint.thetaRad),
+      thetaDhDeg: THREE.MathUtils.radToDeg(joint.thetaRad + joint.thetaOffsetRad),
+      thetaOffsetDeg: joint.thetaOffset,
     }));
   }
 
@@ -363,7 +407,7 @@ export class RobotArm {
     this.kinematics = computeForwardKinematics(this.joints);
     this.updateModelTransforms();
 
-    const points = this.kinematics.positions.map((position) => dhToThree(position));
+    const points = this.getPhysicalPoints();
     this.linkGeometry.setFromPoints(points);
     this.linkGeometry.computeBoundingSphere();
 
@@ -372,9 +416,9 @@ export class RobotArm {
     });
 
     this.jointGizmos.forEach((gizmo, index) => {
-      const orientation = dhMatrixToThree(this.kinematics.cumulativeMatrices[index]);
+      const orientation = dhMatrixToThree(this.kinematics.jointMatrices[index]);
 
-      gizmo.position.copy(dhToThree(this.kinematics.positions[index + 1]));
+      gizmo.position.copy(points[index]);
       gizmo.quaternion.setFromRotationMatrix(orientation);
     });
 
@@ -389,62 +433,23 @@ export class RobotArm {
   }
 
   updateModelTransforms() {
-    modelFiles.forEach(({ fileName, startIndex, endIndex, pointIndex, matrixIndex, visualScale, scaleOffset }) => {
-      const instance = this.loadedModels.get(fileName);
-
-      if (!instance) {
+    this.loadedModels.forEach((instance) => {
+      if (!instance.visualPivot) {
         return;
       }
 
-      if (startIndex === null || endIndex === null) {
-        const point = pointIndex === null ? null : this.kinematics?.positions[pointIndex];
-        const matrix = matrixIndex === undefined ? null : this.kinematics?.cumulativeMatrices[matrixIndex];
+      const currentJointMatrix = dhMatrixToThree(
+        this.kinematics.jointMatrices[instance.jointIndex]
+      );
+      const inverseZeroJointMatrix = dhMatrixToThree(
+        this.zeroKinematics.jointMatrices[instance.jointIndex]
+      ).invert();
+      const modelMatrix = currentJointMatrix
+        .multiply(inverseZeroJointMatrix)
+        .multiply(instance.zeroWorldMatrix);
 
-        instance.model.position.copy(point ? dhToThree(point) : new THREE.Vector3());
-        if (matrix) {
-          instance.model.quaternion.setFromRotationMatrix(dhMatrixToThree(matrix));
-        } else {
-          instance.model.rotation.set(0, 0, 0);
-        }
-        instance.model.scale.set(
-          visualScale * scaleOffset.x,
-          visualScale * scaleOffset.y,
-          visualScale * scaleOffset.z
-        );
-        return;
-      }
-
-      const start = this.kinematics?.positions[startIndex];
-      const end = this.kinematics?.positions[endIndex];
-
-      if (start && end) {
-        const startThree = dhToThree(start);
-        const endThree = dhToThree(end);
-        const direction = endThree.clone().sub(startThree);
-        const length = direction.length();
-
-        if (length === 0) {
-          return;
-        }
-
-        const rotation = new THREE.Quaternion().setFromUnitVectors(
-          new THREE.Vector3(0, 1, 0),
-          direction.normalize()
-        );
-        const scaleY = instance.barLength > 0 ? length / instance.barLength : 1;
-
-        instance.startPivot.position.copy(startThree);
-        instance.startPivot.quaternion.copy(rotation);
-        instance.startPivot.scale.set(1, 1, 1);
-        instance.model.position.set(0, -instance.barMinY * scaleY, 0);
-        instance.model.rotation.set(0, 0, 0);
-        instance.model.scale.set(
-          visualScale * scaleOffset.x,
-          scaleY * scaleOffset.y,
-          visualScale * scaleOffset.z
-        );
-        instance.endPivot.position.set(0, length, 0);
-      }
+      instance.visualPivot.matrix.copy(modelMatrix);
+      instance.visualPivot.matrixWorldNeedsUpdate = true;
     });
   }
 }

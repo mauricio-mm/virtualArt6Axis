@@ -29,8 +29,10 @@ function createAxisLabel(text, color) {
 }
 
 export function createGrid() {
+  const group = new THREE.Group();
   const grid = new THREE.GridHelper(10, 10, 0xe8edf2, 0xb8c0ca);
-  grid.position.y = -0.5;
+  grid.rotation.x = Math.PI / 2;
+  grid.position.z = -0.5;
   grid.material.opacity = 0.72;
   grid.material.transparent = true;
 
@@ -38,18 +40,18 @@ export function createGrid() {
   labels.name = "worldAxisLabels";
 
   const xLabel = createAxisLabel("X", "#ff3b30");
-  xLabel.position.set(5.35, -0.45, 0);
+  xLabel.position.set(5.35, 0, -0.45);
   labels.add(xLabel);
 
   const yLabel = createAxisLabel("Y", "#34c759");
-  yLabel.position.set(0, 5, 0);
+  yLabel.position.set(0, 5.35, -0.45);
   labels.add(yLabel);
 
   const zLabel = createAxisLabel("Z", "#007aff");
-  zLabel.position.set(0, -0.45, 5.35);
+  zLabel.position.set(0, 0, 5.35);
   labels.add(zLabel);
 
-  grid.add(labels);
+  group.add(grid, labels);
 
-  return grid;
+  return group;
 }

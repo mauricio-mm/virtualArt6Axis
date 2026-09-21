@@ -8,14 +8,22 @@ from matplotlib.widgets import Slider
 # ============================================================
 
 dh_definitions = [
-  { "name": "J1", "theta": 0, "d": 229.4,   "a": 0.0, "alpha": 90,  "min": -180, "max": 180 },
-  { "name": "J2", "theta": 0, "d": 0.0, "a": 229.4, "alpha": 0,  "min": -180, "max": 180 },
-  { "name": "J3", "theta": 0, "d": 0.0, "a": 250.2, "alpha": 0,  "min": -180, "max": 180 },
-  { "name": "J4", "theta": 0, "d": 0.0, "a": 252.5, "alpha": 90, "min": -180, "max": 180 },
-  { "name": "J5", "theta": 0, "d": 0.0, "a": 158.9, "alpha": 90, "min": -180, "max": 180 },
-  { "name": "J6", "theta": 0, "d": 0.0,("a"): 152.0, "alpha": 90, "min": -180,("max"): 180 },
+  { "name": "J1", "theta": 0, "theta_offset": 0, "d": 229.4, "a": 0.0, "alpha": -90, "min": -180, "max": 180 },
+  { "name": "J2", "theta": 0, "theta_offset": 0, "d": 0.0, "a": 250.2, "alpha": 0, "min": -180, "max": 180 },
+  { "name": "J3", "theta": 0, "theta_offset": 90, "d": 0.0, "a": 0.0, "alpha": 90, "min": -180, "max": 180 },
+  { "name": "J4", "theta": 0, "theta_offset": 0, "d": 252.5, "a": 0.0, "alpha": -90, "min": -180, "max": 180 },
+  { "name": "J5", "theta": 0, "theta_offset": 0, "d": 158.9, "a": 0.0, "alpha": 90, "min": -180, "max": 180 },
+  { "name": "J6", "theta": 0, "theta_offset": 0, "d": 152.0, "a": 0.0, "alpha": 0, "min": -180, "max": 180 },
 ]
 
+physical_joint_frames = [
+    (0, 0),
+    (1, 1),
+    (2, 2),
+    (3, 4),
+    (4, 5),
+    (5, 6),
+]
 
 # ============================================================
 # MATRIZ DH PADRÃO
@@ -54,7 +62,7 @@ def calculate_frames(joint_angles):
 
     for i, dh in enumerate(dh_definitions):
 
-        theta = joint_angles[i]
+        theta = joint_angles[i] + dh["theta_offset"]
 
         A = dh_matrix(
             theta,
@@ -146,10 +154,14 @@ def draw_robot(ax, joint_angles):
     # POSIÇÕES DAS JUNTAS
     # --------------------------------------------------------
 
-    positions = np.array([
-        T[:3, 3]
-        for T in frames
-    ])
+    joint_frames = []
+
+    for orientation_index, position_index in physical_joint_frames:
+        joint_frame = frames[orientation_index].copy()
+        joint_frame[:3, 3] = frames[position_index][:3, 3]
+        joint_frames.append(joint_frame)
+
+    positions = np.array([T[:3, 3] for T in joint_frames])
 
     # --------------------------------------------------------
     # DESENHA OS ELos
@@ -168,21 +180,12 @@ def draw_robot(ax, joint_angles):
     # DESENHA OS FRAMES
     # --------------------------------------------------------
 
-    # Frame 0 = base
-    draw_frame(
-        ax,
-        frames[0],
-        "Base",
-        size=60
-    )
-
-    # J1 ... J6
-    for i in range(1, len(frames)):
-
+    # A junta Ji gira em torno de z(i-1).
+    for i, frame in enumerate(joint_frames):
         draw_frame(
             ax,
-            frames[i],
-            f"J{i}",
+            frame,
+            f"J{i + 1}",
             size=60
         )
 
@@ -196,7 +199,7 @@ def draw_robot(ax, joint_angles):
             position[0],
             position[1],
             position[2] + 20,
-            f"J{i}",
+            f"J{i + 1}",
             fontsize=9
         )
 
@@ -206,10 +209,10 @@ def draw_robot(ax, joint_angles):
 
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
+    ax.set_zlabel("Z (vertical)")
 
     ax.set_title(
-        "Visualizador Denavit-Hartenberg"
+        "DH padrao e Three.js no mesmo sistema Z-up"
     )
 
     ax.grid(True)

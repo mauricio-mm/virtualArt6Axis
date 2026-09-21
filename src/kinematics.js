@@ -6,13 +6,15 @@ export const DH_TO_THREE_SCALE = 0.01;
 export const THREE_TO_DH_SCALE = 1 / DH_TO_THREE_SCALE;
 
 export const dhDefinitions = [
-  { name: "J1", theta: 0, d: 0.0, a: 0.0, alpha: 0,  min: -180, max: 180 },
-  { name: "J2", theta: 0, d: 229.4, a: 0.0, alpha: 90, min: -180, max: 180 },
-  { name: "J3", theta: 0, d: 0.0, a: 250.2, alpha: 0,  min: -180, max: 180 },
-  { name: "J4", theta: 0, d: 252.5, a: 0.0, alpha: 90, min: -180, max: 180 },
-  { name: "J5", theta: 0, d: 158.9, a: 0.0, alpha: 90, min: -180, max: 180 },
-  { name: "J6", theta: 0, d: 152.0, a: 0.0, alpha: 90, min: -180, max: 180 },
+  { name: "J1", theta: 0, thetaOffset: 0, d: 229.4, a: 0.0, alpha: -90, min: -180, max: 180 },
+  { name: "J2", theta: 0, thetaOffset: 0, d: 0.0, a: 250.2, alpha: 0, min: -180, max: 180 },
+  { name: "J3", theta: 0, thetaOffset: 90, d: 0.0, a: 0.0, alpha: 90, min: -180, max: 180 },
+  { name: "J4", theta: 0, thetaOffset: 0, d: 252.5, a: 0.0, alpha: -90, min: -180, max: 180 },
+  { name: "J5", theta: 0, thetaOffset: 0, d: 158.9, a: 0.0, alpha: 90, min: -180, max: 180 },
+  { name: "J6", theta: 0, thetaOffset: 0, d: 152.0, a: 0.0, alpha: 0, min: -180, max: 180 },
 ];
+
+const physicalJointPositionIndices = [0, 1, 2, 4, 5, 6];
 
 export const workspaceRadiusMm = dhDefinitions.reduce(
   (radius, joint) => radius + Math.hypot(joint.d, joint.a),
@@ -24,6 +26,7 @@ export function createJointState() {
   return dhDefinitions.map((joint) => ({
     ...joint,
     thetaRad: joint.theta * DEG_TO_RAD,
+    thetaOffsetRad: joint.thetaOffset * DEG_TO_RAD,
     alphaRad: joint.alpha * DEG_TO_RAD,
     minRad: joint.min * DEG_TO_RAD,
     maxRad: joint.max * DEG_TO_RAD,
@@ -31,19 +34,19 @@ export function createJointState() {
 }
 
 export function dhToThree(vector) {
-  return new THREE.Vector3(
-    vector.x * DH_TO_THREE_SCALE,
-    vector.z * DH_TO_THREE_SCALE,
-    vector.y * DH_TO_THREE_SCALE
-  );
+  return vector.clone().multiplyScalar(DH_TO_THREE_SCALE);
 }
 
 export function threeToDh(vector) {
-  return new THREE.Vector3(
-    vector.x * THREE_TO_DH_SCALE,
-    vector.z * THREE_TO_DH_SCALE,
-    vector.y * THREE_TO_DH_SCALE
-  );
+  return vector.clone().multiplyScalar(THREE_TO_DH_SCALE);
+}
+
+export function dhMatrixToThree(matrixValues) {
+  const threeMatrix = new THREE.Matrix4().set(...matrixValues);
+  const position = new THREE.Vector3().setFromMatrixPosition(threeMatrix);
+
+  threeMatrix.setPosition(position.multiplyScalar(DH_TO_THREE_SCALE));
+  return threeMatrix;
 }
 
 export function createDhMatrix(theta, d, a, alpha) {
@@ -86,14 +89,18 @@ export function computeForwardKinematics(joints) {
   const origins = [];
   const axes = [];
   const positions = [transformOrigin(transform)];
+  const jointMatrices = [];
   const localMatrices = [];
   const cumulativeMatrices = [];
 
   for (const joint of joints) {
+    const effectiveTheta = joint.thetaRad + (joint.thetaOffsetRad ?? 0);
+
     origins.push(transformOrigin(transform));
     axes.push(transformAxisZ(transform));
+    jointMatrices.push(multiplyMatrix(transform, createDhMatrix(effectiveTheta, 0, 0, 0)));
 
-    const localMatrix = createDhMatrix(joint.thetaRad, joint.d, joint.a, joint.alphaRad);
+    const localMatrix = createDhMatrix(effectiveTheta, joint.d, joint.a, joint.alphaRad);
     localMatrices.push(localMatrix);
 
     transform = multiplyMatrix(transform, localMatrix);
@@ -105,10 +112,15 @@ export function computeForwardKinematics(joints) {
     axes,
     cumulativeMatrices,
     endPosition: positions[positions.length - 1],
+    jointMatrices,
     localMatrices,
     origins,
     positions,
   };
+}
+
+export function getPhysicalJointPositions(state) {
+  return physicalJointPositionIndices.map((index) => state.positions[index]);
 }
 
 export function solveIk(joints, target, options = {}) {

@@ -62,6 +62,56 @@ body {
   padding-top: 0;
 }
 
+.operation-mode {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+
+.operation-mode-label {
+  color: #aeb8c4;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  background: rgba(10, 12, 14, 0.72);
+}
+
+.segment-button {
+  min-width: 0;
+  min-height: 34px;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: #aeb8c4;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.segment-button:first-child {
+  border-left: 0;
+}
+
+.segment-button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #edf1f5;
+}
+
+.segment-button.is-active {
+  background: #dce5ef;
+  color: #15191d;
+  font-weight: 600;
+}
+
 .control-button,
 .panel-toggle,
 .text-button,

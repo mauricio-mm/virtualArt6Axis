@@ -292,6 +292,10 @@ export class RobotArm {
     return this.target.visible ? [this.endEffector, this.target] : [this.endEffector];
   }
 
+  getJointAnglesDegrees() {
+    return this.joints.map((joint) => THREE.MathUtils.radToDeg(joint.thetaRad));
+  }
+
   getMatrixRows() {
     return this.joints.map((joint, index) => ({
       alphaDeg: joint.alpha,

@@ -1,295 +1,575 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
+from matplotlib.widgets import Slider, Button
 
 
 # ============================================================
-# CONFIGURAÇÃO DH
+# SISTEMA DE COORDENADAS
+# ============================================================
+#
+# I = X = vermelho
+# J = Y = verde
+# W = Z = azul
+#
+# Eixos de rotação definidos por você:
+#
+# J1 = W+
+# J2 = I+
+# J3 = I+
+# J4 = W+
+# J5 = I+
+# J6 = W+
+#
 # ============================================================
 
-dh_definitions = [
-  { "name": "J1", "theta": 0, "theta_offset": 0, "d": 229.4, "a": 0.0, "alpha": -90, "min": -180, "max": 180 },
-  { "name": "J2", "theta": 0, "theta_offset": 0, "d": 0.0, "a": 250.2, "alpha": 0, "min": -180, "max": 180 },
-  { "name": "J3", "theta": 0, "theta_offset": 90, "d": 0.0, "a": 0.0, "alpha": 90, "min": -180, "max": 180 },
-  { "name": "J4", "theta": 0, "theta_offset": 0, "d": 252.5, "a": 0.0, "alpha": -90, "min": -180, "max": 180 },
-  { "name": "J5", "theta": 0, "theta_offset": 0, "d": 158.9, "a": 0.0, "alpha": 90, "min": -180, "max": 180 },
-  { "name": "J6", "theta": 0, "theta_offset": 0, "d": 152.0, "a": 0.0, "alpha": 0, "min": -180, "max": 180 },
+
+I = np.array([1.0, 0.0, 0.0])
+J = np.array([0.0, 1.0, 0.0])
+W = np.array([0.0, 0.0, 1.0])
+
+
+# ============================================================
+# EIXO DE ROTAÇÃO DE CADA JUNTA
+# ============================================================
+
+joint_axes = [
+    W,  # J1
+    I,  # J2
+    I,  # J3
+    W,  # J4
+    I,  # J5
+    W   # J6
 ]
 
-physical_joint_frames = [
-    (0, 0),
-    (1, 1),
-    (2, 2),
-    (3, 4),
-    (4, 5),
-    (5, 6),
+
+joint_axis_names = [
+    "W+",
+    "I+",
+    "I+",
+    "W+",
+    "I+",
+    "W+"
 ]
 
+
 # ============================================================
-# MATRIZ DH PADRÃO
+# DISTÂNCIA / POSIÇÃO ENTRE AS JUNTAS NA POSIÇÃO ZERO
+# ============================================================
+#
+# Aqui J1 é a origem.
+#
+# J1 -> J2 = 229.4
+# J2 -> J3 = 250.2
+# J3 -> J4 = 252.5
+# J4 -> J5 = 158.9
+# J5 -> J6 = 152.0
+#
+# IMPORTANTE:
+#
+# J3 -> J4 está em I+
+#
+# portanto:
+#
+# J3 e J4 permanecem na mesma altura W
+#
 # ============================================================
 
-def dh_matrix(theta, d, a, alpha):
+link_offsets = [
+    np.array([0.0,   0.0, 229.4]),  # J1 -> J2
+    np.array([250.2, 0.0,   0.0]),  # J2 -> J3
 
-    theta = np.radians(theta)
-    alpha = np.radians(alpha)
+    # J3 -> J4
+    # MESMA ALTURA
+    np.array([252.5, 0.0,   0.0]),
 
-    ct = np.cos(theta)
-    st = np.sin(theta)
+    np.array([0.0,   0.0, 158.9]),  # J4 -> J5
+    np.array([152.0, 0.0,   0.0])   # J5 -> J6
+]
 
-    ca = np.cos(alpha)
-    sa = np.sin(alpha)
+
+# ============================================================
+# MATRIZ DE ROTAÇÃO EM TORNO DE UM EIXO
+# Rodrigues
+# ============================================================
+
+def rotation_matrix(axis, angle_degrees):
+
+    axis = np.asarray(axis, dtype=float)
+
+    axis = axis / np.linalg.norm(axis)
+
+    angle = np.radians(angle_degrees)
+
+    x = axis[0]
+    y = axis[1]
+    z = axis[2]
+
+    c = np.cos(angle)
+    s = np.sin(angle)
+
+    C = 1 - c
 
     return np.array([
-        [ct, -st * ca,  st * sa, a * ct],
-        [st,  ct * ca, -ct * sa, a * st],
-        [0,        sa,       ca,      d],
-        [0,         0,        0,      1]
+        [
+            c + x*x*C,
+            x*y*C - z*s,
+            x*z*C + y*s
+        ],
+
+        [
+            y*x*C + z*s,
+            c + y*y*C,
+            y*z*C - x*s
+        ],
+
+        [
+            z*x*C - y*s,
+            z*y*C + x*s,
+            c + z*z*C
+        ]
     ])
 
 
 # ============================================================
-# CALCULA TODOS OS FRAMES
+# MATRIZ HOMOGÊNEA DE ROTAÇÃO
 # ============================================================
 
-def calculate_frames(joint_angles):
+def homogeneous_rotation(axis, angle):
 
-    frames = []
-
-    # Frame da base
     T = np.eye(4)
-    frames.append(T.copy())
 
-    for i, dh in enumerate(dh_definitions):
+    T[:3, :3] = rotation_matrix(
+        axis,
+        angle
+    )
 
-        theta = joint_angles[i] + dh["theta_offset"]
+    return T
 
-        A = dh_matrix(
-            theta,
-            dh["d"],
-            dh["a"],
-            dh["alpha"]
+
+# ============================================================
+# MATRIZ HOMOGÊNEA DE TRANSLAÇÃO
+# ============================================================
+
+def homogeneous_translation(vector):
+
+    T = np.eye(4)
+
+    T[:3, 3] = vector
+
+    return T
+
+
+# ============================================================
+# CINEMÁTICA DIRETA
+# ============================================================
+
+def forward_kinematics(angles):
+
+    transforms_before_rotation = []
+    transforms_after_rotation = []
+
+    T = np.eye(4)
+
+    for i in range(6):
+
+        # ----------------------------------------------------
+        # Estamos exatamente no centro da junta
+        # antes da rotação
+        # ----------------------------------------------------
+
+        transforms_before_rotation.append(
+            T.copy()
         )
 
-        T = T @ A
+        # ----------------------------------------------------
+        # Rotação da junta
+        # ----------------------------------------------------
 
-        frames.append(T.copy())
+        R = homogeneous_rotation(
+            joint_axes[i],
+            angles[i]
+        )
 
-    return frames
+        T = T @ R
+
+        transforms_after_rotation.append(
+            T.copy()
+        )
+
+        # ----------------------------------------------------
+        # Caminha até a próxima junta
+        # ----------------------------------------------------
+
+        if i < 5:
+
+            Translation = homogeneous_translation(
+                link_offsets[i]
+            )
+
+            T = T @ Translation
+
+    return (
+        transforms_before_rotation,
+        transforms_after_rotation
+    )
 
 
 # ============================================================
-# DESENHO DOS FRAMES
+# DESENHAR REFERENCIAL I J W
 # ============================================================
 
-def draw_frame(ax, T, name, size=50):
+def draw_coordinate_frame(ax, T, tamanho=55):
 
-    origin = T[:3, 3]
+    origem = T[:3, 3]
 
-    x_axis = T[:3, 0]
-    y_axis = T[:3, 1]
-    z_axis = T[:3, 2]
+    R = T[:3, :3]
 
-    # X
+    eixo_i = R @ I
+    eixo_j = R @ J
+    eixo_w = R @ W
+
+    # I
     ax.quiver(
-        origin[0],
-        origin[1],
-        origin[2],
-        x_axis[0],
-        x_axis[1],
-        x_axis[2],
-        length=size,
+        origem[0],
+        origem[1],
+        origem[2],
+        eixo_i[0],
+        eixo_i[1],
+        eixo_i[2],
+        length=tamanho,
+        normalize=True,
         color="red",
-        arrow_length_ratio=0.15
+        linewidth=2
     )
 
-    # Y
+    # J
     ax.quiver(
-        origin[0],
-        origin[1],
-        origin[2],
-        y_axis[0],
-        y_axis[1],
-        y_axis[2],
-        length=size,
+        origem[0],
+        origem[1],
+        origem[2],
+        eixo_j[0],
+        eixo_j[1],
+        eixo_j[2],
+        length=tamanho,
+        normalize=True,
         color="green",
-        arrow_length_ratio=0.15
+        linewidth=2
     )
 
-    # Z
+    # W
     ax.quiver(
-        origin[0],
-        origin[1],
-        origin[2],
-        z_axis[0],
-        z_axis[1],
-        z_axis[2],
-        length=size,
+        origem[0],
+        origem[1],
+        origem[2],
+        eixo_w[0],
+        eixo_w[1],
+        eixo_w[2],
+        length=tamanho,
+        normalize=True,
         color="blue",
-        arrow_length_ratio=0.15
-    )
-
-    # Nome do frame
-    ax.text(
-        origin[0],
-        origin[1],
-        origin[2],
-        f"  {name}",
-        fontsize=10,
-        fontweight="bold"
+        linewidth=2
     )
 
 
 # ============================================================
-# DESENHA O ROBÔ
+# DESENHAR EIXO REAL DE ROTAÇÃO DA JUNTA
 # ============================================================
 
-def draw_robot(ax, joint_angles):
+def draw_joint_axis(ax, T, eixo_local, tamanho=100):
 
-    ax.clear()
+    origem = T[:3, 3]
 
-    frames = calculate_frames(joint_angles)
+    R = T[:3, :3]
 
-    # --------------------------------------------------------
-    # POSIÇÕES DAS JUNTAS
-    # --------------------------------------------------------
+    eixo_world = R @ eixo_local
 
-    joint_frames = []
+    inicio = origem - eixo_world * tamanho / 2
 
-    for orientation_index, position_index in physical_joint_frames:
-        joint_frame = frames[orientation_index].copy()
-        joint_frame[:3, 3] = frames[position_index][:3, 3]
-        joint_frames.append(joint_frame)
-
-    positions = np.array([T[:3, 3] for T in joint_frames])
-
-    # --------------------------------------------------------
-    # DESENHA OS ELos
-    # --------------------------------------------------------
+    fim = origem + eixo_world * tamanho / 2
 
     ax.plot(
-        positions[:, 0],
-        positions[:, 1],
-        positions[:, 2],
-        "-o",
-        linewidth=3,
-        markersize=7
+        [
+            inicio[0],
+            fim[0]
+        ],
+        [
+            inicio[1],
+            fim[1]
+        ],
+        [
+            inicio[2],
+            fim[2]
+        ],
+        color="black",
+        linewidth=4
     )
-
-    # --------------------------------------------------------
-    # DESENHA OS FRAMES
-    # --------------------------------------------------------
-
-    # A junta Ji gira em torno de z(i-1).
-    for i, frame in enumerate(joint_frames):
-        draw_frame(
-            ax,
-            frame,
-            f"J{i + 1}",
-            size=60
-        )
-
-    # --------------------------------------------------------
-    # LABEL DAS JUNTAS
-    # --------------------------------------------------------
-
-    for i, position in enumerate(positions):
-
-        ax.text(
-            position[0],
-            position[1],
-            position[2] + 20,
-            f"J{i + 1}",
-            fontsize=9
-        )
-
-    # --------------------------------------------------------
-    # CONFIGURAÇÃO DOS EIXOS
-    # --------------------------------------------------------
-
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z (vertical)")
-
-    ax.set_title(
-        "DH padrao e Three.js no mesmo sistema Z-up"
-    )
-
-    ax.grid(True)
-
-    # Mantém escala semelhante nos três eixos
-    max_range = np.ptp(positions, axis=0).max()
-
-    if max_range < 1:
-        max_range = 500
-
-    center = positions.mean(axis=0)
-
-    ax.set_xlim(
-        center[0] - max_range,
-        center[0] + max_range
-    )
-
-    ax.set_ylim(
-        center[1] - max_range,
-        center[1] + max_range
-    )
-
-    ax.set_zlim(
-        center[2] - max_range,
-        center[2] + max_range
-    )
-
-    ax.set_box_aspect([1, 1, 1])
 
 
 # ============================================================
-# JANELA
+# CONFIGURAÇÃO INICIAL
 # ============================================================
 
-fig = plt.figure(figsize=(11, 8))
+angles = [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+]
+
+
+# ============================================================
+# FIGURA
+# ============================================================
+
+fig = plt.figure(
+    figsize=(13, 10)
+)
 
 ax = fig.add_subplot(
     111,
     projection="3d"
 )
 
-# Ângulos iniciais
-joint_angles = np.zeros(6)
 
-draw_robot(
-    ax,
-    joint_angles
+# Espaço para os sliders
+
+plt.subplots_adjust(
+    left=0.08,
+    right=0.92,
+    top=0.95,
+    bottom=0.35
 )
+
+
+# ============================================================
+# FUNÇÃO DE DESENHO
+# ============================================================
+
+def draw_robot():
+
+    ax.cla()
+
+    (
+        transforms_before,
+        transforms_after
+    ) = forward_kinematics(angles)
+
+    # ========================================================
+    # POSIÇÕES DAS JUNTAS
+    # ========================================================
+
+    positions = np.array([
+        T[:3, 3]
+        for T in transforms_before
+    ])
+
+    # ========================================================
+    # DESENHAR OS ELOS
+    # ========================================================
+
+    ax.plot(
+        positions[:, 0],
+        positions[:, 1],
+        positions[:, 2],
+        "-o",
+        color="black",
+        linewidth=5,
+        markersize=8
+    )
+
+    # ========================================================
+    # CADA JUNTA
+    # ========================================================
+
+    for i in range(6):
+
+        T_before = transforms_before[i]
+
+        T_after = transforms_after[i]
+
+        p = T_before[:3, 3]
+
+        # Nome
+        ax.text(
+            p[0],
+            p[1],
+            p[2] + 18,
+            f"J{i + 1}",
+            fontsize=11,
+            fontweight="bold"
+        )
+
+        # eixo de rotação preto
+        draw_joint_axis(
+            ax,
+            T_before,
+            joint_axes[i],
+            tamanho=110
+        )
+
+        # referencial depois da rotação
+        draw_coordinate_frame(
+            ax,
+            T_after,
+            tamanho=50
+        )
+
+    # ========================================================
+    # INFORMAÇÕES DOS ÂNGULOS
+    # ========================================================
+
+    texto = ""
+
+    for i in range(6):
+
+        texto += (
+            f"J{i + 1}: "
+            f"{angles[i]:6.1f}°   "
+            f"eixo {joint_axis_names[i]}\n"
+        )
+
+    ax.text2D(
+        0.02,
+        0.98,
+        texto,
+        transform=ax.transAxes,
+        verticalalignment="top",
+        fontsize=10
+    )
+
+    # ========================================================
+    # LEGENDA
+    # ========================================================
+
+    ax.plot(
+        [],
+        [],
+        [],
+        color="red",
+        linewidth=3,
+        label="I / X"
+    )
+
+    ax.plot(
+        [],
+        [],
+        [],
+        color="green",
+        linewidth=3,
+        label="J / Y"
+    )
+
+    ax.plot(
+        [],
+        [],
+        [],
+        color="blue",
+        linewidth=3,
+        label="W / Z"
+    )
+
+    ax.plot(
+        [],
+        [],
+        [],
+        color="black",
+        linewidth=4,
+        label="Eixo da junta"
+    )
+
+    ax.legend(
+        loc="upper right"
+    )
+
+    # ========================================================
+    # EIXOS
+    # ========================================================
+
+    ax.set_xlabel(
+        "I / X [mm]"
+    )
+
+    ax.set_ylabel(
+        "J / Y [mm]"
+    )
+
+    ax.set_zlabel(
+        "W / Z [mm]"
+    )
+
+    ax.set_title(
+        "Visualização interativa do robô"
+    )
+
+    # ========================================================
+    # LIMITES
+    # ========================================================
+
+    ax.set_xlim(
+        -750,
+        750
+    )
+
+    ax.set_ylim(
+        -750,
+        750
+    )
+
+    ax.set_zlim(
+        -500,
+        900
+    )
+
+    ax.set_box_aspect(
+        [1, 1, 1]
+    )
+
+    ax.grid(True)
+
+    # perspectiva
+    ax.view_init(
+        elev=25,
+        azim=-55
+    )
+
+    fig.canvas.draw_idle()
 
 
 # ============================================================
 # SLIDERS
 # ============================================================
 
+slider_height = 0.025
+
+slider_positions = [
+    0.28,
+    0.24,
+    0.20,
+    0.16,
+    0.12,
+    0.08
+]
+
+
 sliders = []
 
-# espaço inferior para os sliders
-plt.subplots_adjust(
-    bottom=0.30
-)
 
-for i, dh in enumerate(dh_definitions):
-
-    y = 0.24 - i * 0.035
+def create_slider(index):
 
     slider_ax = plt.axes([
-        0.25,
-        y,
-        0.60,
-        0.025
+        0.18,
+        slider_positions[index],
+        0.62,
+        slider_height
     ])
 
     slider = Slider(
-        slider_ax,
-        dh["name"],
-        dh["min"],
-        dh["max"],
+        ax=slider_ax,
+        label=f"J{index + 1}",
+        valmin=0,
+        valmax=180,
         valinit=0,
         valstep=1
     )
@@ -297,31 +577,105 @@ for i, dh in enumerate(dh_definitions):
     sliders.append(slider)
 
 
+for i in range(6):
+
+    create_slider(i)
+
+
 # ============================================================
-# ATUALIZAÇÃO
+# ATUALIZAR
 # ============================================================
 
-def update(val):
+def update(_):
 
-    angles = [
-        slider.val
-        for slider in sliders
-    ]
+    for i in range(6):
 
-    draw_robot(
-        ax,
-        angles
-    )
+        angles[i] = sliders[i].val
 
-    fig.canvas.draw_idle()
+    draw_robot()
 
 
 for slider in sliders:
-    slider.on_changed(update)
+
+    slider.on_changed(
+        update
+    )
 
 
 # ============================================================
-# MOSTRA
+# BOTÃO RESET
 # ============================================================
+
+reset_ax = plt.axes([
+    0.83,
+    0.08,
+    0.09,
+    0.05
+])
+
+reset_button = Button(
+    reset_ax,
+    "ZERAR"
+)
+
+
+def reset(event):
+
+    for slider in sliders:
+
+        slider.reset()
+
+
+reset_button.on_clicked(
+    reset
+)
+
+
+# ============================================================
+# MOSTRAR POSIÇÃO INICIAL NO TERMINAL
+# ============================================================
+
+def print_initial_positions():
+
+    transforms_before, _ = forward_kinematics(
+        [0, 0, 0, 0, 0, 0]
+    )
+
+    print()
+    print("=" * 70)
+    print("POSIÇÃO DAS JUNTAS EM 0 GRAUS")
+    print("=" * 70)
+
+    for i, T in enumerate(transforms_before):
+
+        p = T[:3, 3]
+
+        print(
+            f"J{i + 1}: "
+            f"I={p[0]:8.2f}   "
+            f"J={p[1]:8.2f}   "
+            f"W={p[2]:8.2f}"
+        )
+
+    print("=" * 70)
+
+    print()
+    print("Eixos:")
+
+    for i in range(6):
+
+        print(
+            f"J{i + 1}: "
+            f"{joint_axis_names[i]}"
+        )
+
+
+# ============================================================
+# EXECUTAR
+# ============================================================
+
+print_initial_positions()
+
+draw_robot()
 
 plt.show()

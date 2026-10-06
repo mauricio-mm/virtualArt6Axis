@@ -67,3 +67,16 @@ export function parseJointAnglesMessage(payload) {
 export function formatJointAngles(angles) {
   return angles.map((angle, index) => `J${index + 1} ${angle.toFixed(1)} deg`).join(", ");
 }
+
+export function formatJointAnglesPayload(angles) {
+  if (angles.length !== JOINT_COUNT || angles.some((angle) => !Number.isFinite(angle))) {
+    throw new Error("Os seis angulos das juntas sao necessarios para publicar.");
+  }
+
+  return angles
+    .map((angle, index) => {
+      const normalizedAngle = Math.abs(angle) < 0.005 ? 0 : angle;
+      return `j${index + 1}: ${normalizedAngle.toFixed(2)}`;
+    })
+    .join(", ");
+}

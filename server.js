@@ -1,6 +1,7 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import mqtt from "mqtt";
@@ -8,10 +9,12 @@ import mqtt from "mqtt";
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT) || 3000;
+const serverInstanceId = randomUUID();
 const mqttEvents = new Set();
 let mqttClient = null;
 let mqttConfig = null;
 let mqttState = "disconnected";
+let mqttRevision = 0;
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -32,14 +35,55 @@ function sendJson(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function writeSse(response, event, data) {
+  if (response.destroyed || response.writableEnded) {
+    mqttEvents.delete(response);
+    return;
+  }
+
+  try {
+    response.write(`event: ${event}\n`);
+    response.write(`data: ${JSON.stringify(data)}\n\n`);
+  } catch {
+    mqttEvents.delete(response);
+    response.destroy();
+  }
+}
+
+function getMqttSnapshot() {
+  const publicConfig = mqttConfig
+    ? Object.fromEntries(Object.entries(mqttConfig).filter(([key]) => key !== "password"))
+    : null;
+
+  return {
+    config: publicConfig,
+    revision: mqttRevision,
+    serverInstanceId,
+    state: mqttState,
+  };
+}
+
+function broadcastMqttState() {
+  const snapshot = getMqttSnapshot();
+
+  for (const response of [...mqttEvents]) {
+    writeSse(response, "mqtt-state", snapshot);
+  }
+}
+
+function setMqttState(state) {
+  mqttState = state;
+  mqttRevision += 1;
+  broadcastMqttState();
+}
+
 function broadcastMqttLog(type, message, state = mqttState, data = {}) {
-  const payload = JSON.stringify({ ...data, message, state, type });
+  const payload = { ...data, message, revision: mqttRevision, state, type };
 
   console.log(`[mqtt:${type}] ${message}`);
 
-  for (const response of mqttEvents) {
-    response.write(`event: mqtt-log\n`);
-    response.write(`data: ${payload}\n\n`);
+  for (const response of [...mqttEvents]) {
+    writeSse(response, "mqtt-log", payload);
   }
 }
 
@@ -88,50 +132,93 @@ function normalizeMqttConfig(config) {
 }
 
 function closeMqttClient() {
-  if (!mqttClient) {
+  const client = mqttClient;
+
+  if (!client) {
     return;
   }
 
-  mqttClient.end(true);
   mqttClient = null;
+  client.end(true);
+}
+
+function hasSameMqttConfig(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+
+  return [
+    "clientId",
+    "commandTopic",
+    "host",
+    "password",
+    "port",
+    "protocol",
+    "telemetryTopic",
+    "username",
+  ].every((key) => left[key] === right[key]);
 }
 
 function connectMqtt(config) {
+  const nextConfig = normalizeMqttConfig(config);
+
+  if (
+    mqttClient &&
+    ["connected", "connecting"].includes(mqttState) &&
+    hasSameMqttConfig(mqttConfig, nextConfig)
+  ) {
+    broadcastMqttLog("muted", `Conexao MQTT existente reutilizada: ${mqttConfig.url}`, mqttState);
+    return { ...getMqttSnapshot(), reused: true };
+  }
+
   closeMqttClient();
 
-  mqttConfig = normalizeMqttConfig(config);
-  mqttState = "connecting";
-  broadcastMqttLog("out", `CONNECT ${mqttConfig.url}`, mqttState);
-
-  mqttClient = mqtt.connect(mqttConfig.url, {
+  mqttConfig = nextConfig;
+  const client = mqtt.connect(nextConfig.url, {
     clean: true,
-    clientId: mqttConfig.clientId,
+    clientId: nextConfig.clientId,
     connectTimeout: 8000,
     keepalive: 30,
-    password: mqttConfig.password || undefined,
+    password: nextConfig.password || undefined,
     reconnectPeriod: 0,
-    username: mqttConfig.username || undefined,
+    username: nextConfig.username || undefined,
   });
 
-  mqttClient.on("connect", () => {
-    mqttState = "connected";
-    broadcastMqttLog("in", `CONNACK ${mqttConfig.url}`, mqttState);
+  mqttClient = client;
+  setMqttState("connecting");
+  broadcastMqttLog("out", `CONNECT ${nextConfig.url}`, mqttState);
 
-    if (!mqttConfig.telemetryTopic) {
+  client.on("connect", () => {
+    if (mqttClient !== client) {
       return;
     }
 
-    mqttClient.subscribe(mqttConfig.telemetryTopic, { qos: 0 }, (error) => {
-      if (error) {
-        broadcastMqttLog("error", `Erro ao assinar ${mqttConfig.telemetryTopic}: ${error.message}`, mqttState);
+    setMqttState("connected");
+    broadcastMqttLog("in", `CONNACK ${nextConfig.url}`, mqttState);
+
+    if (!nextConfig.telemetryTopic) {
+      return;
+    }
+
+    client.subscribe(nextConfig.telemetryTopic, { qos: 0 }, (error) => {
+      if (mqttClient !== client) {
         return;
       }
 
-      broadcastMqttLog("out", `SUB ${mqttConfig.telemetryTopic}`, mqttState);
+      if (error) {
+        broadcastMqttLog("error", `Erro ao assinar ${nextConfig.telemetryTopic}: ${error.message}`, mqttState);
+        return;
+      }
+
+      broadcastMqttLog("out", `SUB ${nextConfig.telemetryTopic}`, mqttState);
     });
   });
 
-  mqttClient.on("message", (topic, payload) => {
+  client.on("message", (topic, payload) => {
+    if (mqttClient !== client) {
+      return;
+    }
+
     const textPayload = payload.toString();
 
     broadcastMqttLog("in", `RX ${topic}: ${textPayload}`, mqttState, {
@@ -140,21 +227,25 @@ function connectMqtt(config) {
     });
   });
 
-  mqttClient.on("error", (error) => {
-    broadcastMqttLog("error", `Erro MQTT: ${error.message || "erro desconhecido"}`, mqttState);
-  });
-
-  mqttClient.on("close", () => {
-    if (mqttState === "disconnected") {
+  client.on("error", (error) => {
+    if (mqttClient !== client) {
       return;
     }
 
-    mqttState = "disconnected";
-    broadcastMqttLog("muted", "Conexao MQTT fechada.", mqttState);
-    mqttClient = null;
+    broadcastMqttLog("error", `Erro MQTT: ${error.message || "erro desconhecido"}`, mqttState);
   });
 
-  return mqttConfig;
+  client.on("close", () => {
+    if (mqttClient !== client) {
+      return;
+    }
+
+    mqttClient = null;
+    setMqttState("disconnected");
+    broadcastMqttLog("muted", "Conexao MQTT fechada.", mqttState);
+  });
+
+  return { ...getMqttSnapshot(), reused: false };
 }
 
 async function handleMqttApi(request, response, requestUrl) {
@@ -166,25 +257,26 @@ async function handleMqttApi(request, response, requestUrl) {
     });
     response.write(": connected\n\n");
     mqttEvents.add(response);
+    writeSse(response, "mqtt-state", getMqttSnapshot());
 
     request.on("close", () => {
+      mqttEvents.delete(response);
+    });
+    response.on("error", () => {
       mqttEvents.delete(response);
     });
     return true;
   }
 
   if (requestUrl.pathname === "/api/mqtt/status" && request.method === "GET") {
-    sendJson(response, 200, {
-      config: mqttConfig,
-      state: mqttState,
-    });
+    sendJson(response, 200, getMqttSnapshot());
     return true;
   }
 
   if (requestUrl.pathname === "/api/mqtt/connect" && request.method === "POST") {
     try {
-      const config = connectMqtt(await readJsonBody(request));
-      sendJson(response, 202, { config, state: mqttState });
+      const snapshot = connectMqtt(await readJsonBody(request));
+      sendJson(response, 202, snapshot);
     } catch (error) {
       sendJson(response, 400, { error: error.message });
     }
@@ -193,15 +285,17 @@ async function handleMqttApi(request, response, requestUrl) {
   }
 
   if (requestUrl.pathname === "/api/mqtt/disconnect" && request.method === "POST") {
-    mqttState = "disconnected";
     closeMqttClient();
+    setMqttState("disconnected");
     broadcastMqttLog("muted", "Desconectado do broker.", mqttState);
-    sendJson(response, 200, { state: mqttState });
+    sendJson(response, 200, getMqttSnapshot());
     return true;
   }
 
   if (requestUrl.pathname === "/api/mqtt/publish" && request.method === "POST") {
-    if (!mqttClient || mqttState !== "connected") {
+    const client = mqttClient;
+
+    if (!client || mqttState !== "connected") {
       sendJson(response, 409, { error: "MQTT desconectado." });
       return true;
     }
@@ -216,7 +310,7 @@ async function handleMqttApi(request, response, requestUrl) {
         return true;
       }
 
-      mqttClient.publish(topic, payload, { qos: 0 }, (error) => {
+      client.publish(topic, payload, { qos: 0 }, (error) => {
         if (error) {
           broadcastMqttLog("error", `Erro ao publicar ${topic}: ${error.message}`, mqttState);
           return;
@@ -228,7 +322,7 @@ async function handleMqttApi(request, response, requestUrl) {
         });
       });
 
-      sendJson(response, 202, { state: mqttState, topic });
+      sendJson(response, 202, { ...getMqttSnapshot(), topic });
     } catch (error) {
       sendJson(response, 400, { error: error.message });
     }
@@ -255,7 +349,7 @@ function resolvePublicPath(urlPathname) {
   return filePath;
 }
 
-const server = createServer(async (request, response) => {
+async function handleRequest(request, response) {
   const requestUrl = new URL(request.url, `http://${request.headers.host}`);
 
   if (requestUrl.pathname.startsWith("/api/mqtt/")) {
@@ -307,6 +401,19 @@ const server = createServer(async (request, response) => {
     response.writeHead(404);
     response.end("Not found");
   }
+}
+
+const server = createServer((request, response) => {
+  handleRequest(request, response).catch((error) => {
+    console.error("Erro ao processar requisicao HTTP:", error);
+
+    if (!response.headersSent) {
+      sendJson(response, 500, { error: "Erro interno do servidor." });
+      return;
+    }
+
+    response.destroy();
+  });
 });
 
 server.listen(port, host, () => {

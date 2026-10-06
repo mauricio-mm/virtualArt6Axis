@@ -15,9 +15,31 @@
   </head>
   <body>
     <main class="app-shell">
-      <canvas id="scene" aria-label="Cena 3D do braco robotico"></canvas>
+      <canvas id="scene" tabindex="-1" aria-label="Cena 3D do braco robotico"></canvas>
 
       <aside class="control-display" aria-label="Controles do robo">
+        <section id="operation-mode" class="operation-mode" aria-label="Modo de operacao MQTT">
+          <span class="operation-mode-label">Modo</span>
+          <div class="segmented-control" role="group" aria-label="Receber ou enviar juntas">
+            <button
+              class="segment-button is-active"
+              type="button"
+              data-operation-mode="receive"
+              aria-pressed="true"
+            >
+              Receber
+            </button>
+            <button
+              class="segment-button"
+              type="button"
+              data-operation-mode="send"
+              aria-pressed="false"
+            >
+              Enviar
+            </button>
+          </div>
+        </section>
+
         <section
           id="dh-panel"
           class="display-section collapsible-section is-collapsed"

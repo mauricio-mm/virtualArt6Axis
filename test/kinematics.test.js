@@ -29,7 +29,7 @@ test("zero pose exposes the physical joint axes in Three.js coordinates", () => 
     [0, 1, 0],
     [1, 0, 0],
     [0, 1, 0],
-    [1, 0, 0],
+    [0, 1, 0],
   ];
 
   state.axes.forEach((axis, index) => {
@@ -44,14 +44,18 @@ test("DH and Three.js vector conversions are reversible", () => {
   assert.ok(roundTrip.distanceTo(vectorDh) <= tolerance);
 });
 
-test("links J2-J3 and J3-J4 both follow X in the zero pose", () => {
+test("links from J2 through J6 follow X in the zero pose", () => {
   const state = computeForwardKinematics(createJointState());
   const positions = getPhysicalJointPositions(state);
   const link2Direction = positions[2].clone().sub(positions[1]).normalize();
   const link3Direction = positions[3].clone().sub(positions[2]).normalize();
+  const link4Direction = positions[4].clone().sub(positions[3]).normalize();
+  const link5Direction = positions[5].clone().sub(positions[4]).normalize();
 
   assertVectorClose(link2Direction.toArray(), [1, 0, 0]);
   assertVectorClose(link3Direction.toArray(), [1, 0, 0]);
+  assertVectorClose(link4Direction.toArray(), [1, 0, 0]);
+  assertVectorClose(link5Direction.toArray(), [1, 0, 0]);
 });
 
 test("factorized Three.js transforms reproduce the cumulative DH matrices", () => {
@@ -82,14 +86,14 @@ test("factorized Three.js transforms reproduce the cumulative DH matrices", () =
   });
 });
 
-test("J4 rotates its downstream link in the YZ plane", () => {
+test("J5 rotates J5-J6 from X into the XZ plane", () => {
   const joints = createJointState();
-  joints[3].thetaRad = Math.PI / 2;
+  joints[4].thetaRad = Math.PI / 2;
 
   const positions = getPhysicalJointPositions(computeForwardKinematics(joints));
-  const j4ToJ5 = positions[4].clone().sub(positions[3]);
+  const j5ToJ6 = positions[5].clone().sub(positions[4]);
 
-  assertVectorClose(j4ToJ5.toArray(), [0, 0, 158.9]);
+  assertVectorClose(j5ToJ6.toArray(), [0, 0, -152]);
 });
 
 test("J1 and J2 no longer collapse into the same motion", () => {

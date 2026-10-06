@@ -71,6 +71,8 @@ export function createCameraControls(camera, canvas, options = {}) {
   }
 
   canvas.addEventListener("pointerdown", (event) => {
+    canvas.focus({ preventScroll: true });
+
     if (options.onPointerDown?.(event)) {
       return;
     }

@@ -4,17 +4,20 @@ const DEG_TO_RAD = Math.PI / 180;
 const identityMatrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 export const DH_TO_THREE_SCALE = 0.01;
 export const THREE_TO_DH_SCALE = 1 / DH_TO_THREE_SCALE;
+export const linkLengthsMm = Object.freeze({
+  j3ToJ4: 252.5,
+  j4ToJ5: 158.9,
+  j5ToJ6: 152.0,
+});
 
 export const dhDefinitions = [
   { name: "J1", theta: 0, thetaOffset: 0, d: 229.4, a: 0.0, alpha: -90, min: -180, max: 180 },
   { name: "J2", theta: 0, thetaOffset: 0, d: 0.0, a: 250.2, alpha: 0, min: -180, max: 180 },
   { name: "J3", theta: 0, thetaOffset: 90, d: 0.0, a: 0.0, alpha: 90, min: -180, max: 180 },
-  { name: "J4", theta: 0, thetaOffset: 0, d: 252.5, a: 0.0, alpha: -90, min: -180, max: 180 },
-  { name: "J5", theta: 0, thetaOffset: 0, d: 158.9, a: 0.0, alpha: 90, min: -180, max: 180 },
-  { name: "J6", theta: 0, thetaOffset: 0, d: 152.0, a: 0.0, alpha: 0, min: -180, max: 180 },
+  { name: "J4", theta: 0, thetaOffset: 0, d: linkLengthsMm.j3ToJ4 + linkLengthsMm.j4ToJ5, a: 0.0, alpha: -90, min: -180, max: 180 },
+  { name: "J5", theta: 0, thetaOffset: -90, d: 0.0, a: linkLengthsMm.j5ToJ6, alpha: 0, min: -180, max: 180 },
+  { name: "J6", theta: 0, thetaOffset: 0, d: 0.0, a: 0.0, alpha: 0, min: -180, max: 180 },
 ];
-
-const physicalJointPositionIndices = [0, 1, 2, 4, 5, 6];
 
 export const workspaceRadiusMm = dhDefinitions.reduce(
   (radius, joint) => radius + Math.hypot(joint.d, joint.a),
@@ -120,7 +123,18 @@ export function computeForwardKinematics(joints) {
 }
 
 export function getPhysicalJointPositions(state) {
-  return physicalJointPositionIndices.map((index) => state.positions[index]);
+  const physicalJ4 = state.origins[3]
+    .clone()
+    .addScaledVector(state.axes[3], linkLengthsMm.j3ToJ4);
+
+  return [
+    state.positions[0],
+    state.positions[1],
+    state.positions[2],
+    physicalJ4,
+    state.positions[4],
+    state.positions[5],
+  ];
 }
 
 export function solveIk(joints, target, options = {}) {

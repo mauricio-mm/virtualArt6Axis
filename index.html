@@ -91,7 +91,10 @@
             <div class="form-grid">
               <label class="form-field">
                 <span>Protocolo</span>
-                <input id="mqtt-protocol" type="text" value="mqtt" readonly />
+                <select id="mqtt-protocol">
+                  <option value="mqtt">MQTT</option>
+                  <option value="mqtts">MQTTS (TLS)</option>
+                </select>
               </label>
 
               <label class="form-field">

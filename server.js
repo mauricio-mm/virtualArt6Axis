@@ -140,13 +140,15 @@ async function readJsonBody(request) {
 }
 
 function normalizeMqttConfig(config) {
-  const protocol = String(config.protocol || "mqtt").trim();
+  const protocol = String(config.protocol || "mqtt").trim().toLowerCase();
   const host = String(config.host || "").trim();
-  const portValue = Number(config.port || 1883);
 
-  if (protocol !== "mqtt") {
-    throw new Error("Este servidor local esta configurado para MQTT TCP. Use protocolo mqtt.");
+  if (!["mqtt", "mqtts"].includes(protocol)) {
+    throw new Error("Protocolo MQTT invalido. Use mqtt ou mqtts.");
   }
+
+  const defaultPort = protocol === "mqtts" ? 8883 : 1883;
+  const portValue = Number(config.port || defaultPort);
 
   if (!host) {
     throw new Error("Informe o broker MQTT.");
@@ -238,6 +240,7 @@ function connectMqtt(session, config) {
     keepalive: 30,
     password: nextConfig.password || undefined,
     reconnectPeriod: 0,
+    rejectUnauthorized: nextConfig.protocol === "mqtts" ? true : undefined,
     username: nextConfig.username || undefined,
   });
 

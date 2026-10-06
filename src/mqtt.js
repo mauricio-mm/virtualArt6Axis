@@ -9,7 +9,7 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
   const clearLogButton = document.querySelector("#mqtt-clear-log");
   const publishButton = document.querySelector("#mqtt-publish");
   const publishPayload = document.querySelector("#mqtt-publish-payload");
-  const fields = [...form.querySelectorAll("input")];
+  const fields = [...form.querySelectorAll("input, select")];
   const configFields = {
     commandTopic: document.querySelector("#mqtt-command-topic"),
     clientId: document.querySelector("#mqtt-client-id"),
@@ -31,6 +31,19 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
   if (configFields.clientId.value === "threejs-robot-arm") {
     configFields.clientId.value = `threejs-robot-arm-${instanceId.slice(0, 8)}`;
   }
+
+  configFields.protocol.addEventListener("change", () => {
+    const protocol = configFields.protocol.value;
+    const port = configFields.port.value.trim();
+
+    if (protocol === "mqtts" && (!port || port === "1883")) {
+      configFields.port.value = "8883";
+    } else if (protocol === "mqtt" && (!port || port === "8883")) {
+      configFields.port.value = "1883";
+    }
+
+    render();
+  });
 
   createCollapsibleSection("#mqtt-panel", "#mqtt-toggle");
 

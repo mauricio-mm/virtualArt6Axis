@@ -15,6 +15,8 @@ import { applyForwardKinematicsAngles } from "./forward-kinematics.js";
 const jointRadius = 0.13;
 const endEffectorRadius = 0.2;
 const defaultMotionDuration = 1.2;
+const telemetryPointRadius = 0.08;
+const maxTelemetryPoints = 1000;
 const modelFiles = [
   { fileName: "base.glb", role: "base", visualScale: 1 },
   { fileName: "art1.glb", jointIndex: 0, role: "link", visualScale: 1 },
@@ -165,9 +167,15 @@ export class RobotArm {
     this.target.userData.role = "ikTarget";
     this.target.visible = false;
 
+    this.telemetryPoints = new THREE.Group();
+    this.telemetryPoints.name = "telemetryPoints";
+    this.telemetryPointGeometry = new THREE.SphereGeometry(telemetryPointRadius, 12, 8);
+    this.telemetryPointMaterial = new THREE.MeshBasicMaterial({ color: 0x5eead4 });
+
     this.group.add(
       this.models,
       this.workspace,
+      this.telemetryPoints,
       this.link,
       this.endEffector,
       this.target,
@@ -294,6 +302,30 @@ export class RobotArm {
 
   getJointAnglesDegrees() {
     return this.joints.map((joint) => THREE.MathUtils.radToDeg(joint.thetaRad));
+  }
+
+  calculateEndEffectorPositionMm(anglesDegrees) {
+    const joints = createJointState();
+    const kinematics = applyForwardKinematicsAngles(joints, anglesDegrees);
+
+    return kinematics.endPosition.clone();
+  }
+
+  addTelemetryPoint(anglesDegrees = null) {
+    const positionMm = anglesDegrees
+      ? this.calculateEndEffectorPositionMm(anglesDegrees)
+      : this.kinematics.endPosition.clone();
+    const marker = new THREE.Mesh(this.telemetryPointGeometry, this.telemetryPointMaterial);
+
+    marker.position.copy(dhToThree(positionMm));
+    marker.userData.role = "telemetryPoint";
+    this.telemetryPoints.add(marker);
+
+    while (this.telemetryPoints.children.length > maxTelemetryPoints) {
+      this.telemetryPoints.remove(this.telemetryPoints.children[0]);
+    }
+
+    return positionMm;
   }
 
   getMatrixRows() {

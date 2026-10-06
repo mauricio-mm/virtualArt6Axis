@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   formatJointAnglesPayload,
   parseJointAnglesMessage,
+  parsePointFlag,
 } from "../src/joint-message.js";
 
 test("joint payload formatter creates MQTT text accepted by the parser", () => {
@@ -16,4 +17,17 @@ test("joint payload formatter creates MQTT text accepted by the parser", () => {
 test("joint payload formatter requires all six finite angles", () => {
   assert.throws(() => formatJointAnglesPayload([0, 1, 2]), /seis angulos/);
   assert.throws(() => formatJointAnglesPayload([0, 1, 2, 3, 4, Number.NaN]), /seis angulos/);
+});
+
+test("point flag is read from JSON and plain MQTT payloads", () => {
+  assert.equal(parsePointFlag('{"j1": 0, "point": true}'), true);
+  assert.equal(parsePointFlag('{"POINT": "false"}'), false);
+  assert.equal(parsePointFlag("j1: 10, point: true"), true);
+  assert.equal(parsePointFlag("point=0"), false);
+});
+
+test("missing or invalid point flags default to false", () => {
+  assert.equal(parsePointFlag("j1: 10, j2: 20"), false);
+  assert.equal(parsePointFlag('{"point": "maybe"}'), false);
+  assert.equal(parsePointFlag(""), false);
 });

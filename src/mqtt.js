@@ -44,7 +44,7 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
   }
 
   function appendLog(type, message) {
-    const waitingLine = log.querySelector(".muted");
+    const waitingLine = log.querySelector(".is-placeholder");
 
     if (waitingLine) {
       waitingLine.remove();
@@ -267,7 +267,7 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
   });
 
   clearLogButton.addEventListener("click", () => {
-    log.innerHTML = '<div class="mqtt-log-line muted">Log limpo.</div>';
+    log.innerHTML = '<div class="mqtt-log-line muted is-placeholder">Log limpo.</div>';
   });
 
   async function publish(payload, topic = getConfig().commandTopic) {

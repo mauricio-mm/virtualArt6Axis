@@ -3,6 +3,7 @@ import {
   formatJointAngles,
   formatJointAnglesPayload,
   parseJointAnglesMessage,
+  parsePointFlag,
 } from "./joint-message.js";
 import { createMqttPanel } from "./mqtt.js";
 import { createOperationModeControl, operationModes } from "./operation-mode.js";
@@ -18,23 +19,40 @@ export function createUi({ robot }) {
     },
     onMessage({ payload }) {
       const angles = parseJointAnglesMessage(payload);
+      const shouldCreatePoint = parsePointFlag(payload);
 
-      if (!angles) {
+      if (!angles && !shouldCreatePoint) {
         return null;
       }
 
       if (modeControl.getMode() === operationModes.send) {
         return {
-          message: "Angulos recebidos ignorados: modo Enviar ativo.",
+          message: "Telemetria recebida ignorada: modo Enviar ativo.",
           type: "muted",
         };
       }
 
-      robot.setJointAnglesDegrees(angles);
-      updateRobot();
+      let terminalMm = null;
+
+      if (angles) {
+        terminalMm = robot.calculateEndEffectorPositionMm(angles);
+        robot.setJointAnglesDegrees(angles);
+        updateRobot();
+      }
+
+      if (shouldCreatePoint) {
+        const pointMm = robot.addTelemetryPoint(angles);
+
+        return {
+          message: angles
+            ? `Trajetoria FK iniciada: ${formatJointAngles(angles)} | ponto criado em ${formatPositionMm(pointMm)}`
+            : `Ponto criado na posicao atual: ${formatPositionMm(pointMm)}`,
+          type: "muted",
+        };
+      }
 
       return {
-        message: `Trajetoria FK iniciada: ${formatJointAngles(angles)} | terminal ${formatPositionMm(robot.getStatus().endMm)}`,
+        message: `Trajetoria FK iniciada: ${formatJointAngles(angles)} | terminal ${formatPositionMm(terminalMm)}`,
         type: "muted",
       };
     },

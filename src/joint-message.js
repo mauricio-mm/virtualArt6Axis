@@ -1,5 +1,6 @@
 const JOINT_COUNT = 6;
 const jointPattern = /\bj\s*([1-6])\s*[:=]\s*(-?\d+(?:[.,]\d+)?)/gi;
+const pointPattern = /\bpoint\s*[:=]\s*(true|false|1|0)\b/i;
 
 function parseAngle(value) {
   const angle = Number(String(value).trim().replace(",", "."));
@@ -40,6 +41,24 @@ function completeAngles(angles) {
   return angles.every((angle) => Number.isFinite(angle)) ? angles : null;
 }
 
+function parsePointValue(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  const normalized = String(value ?? "").trim().toLowerCase();
+
+  if (["true", "1"].includes(normalized)) {
+    return true;
+  }
+
+  if (["false", "0"].includes(normalized)) {
+    return false;
+  }
+
+  return false;
+}
+
 export function parseJointAnglesMessage(payload) {
   const text = String(payload ?? "").trim();
 
@@ -62,6 +81,29 @@ export function parseJointAnglesMessage(payload) {
   }
 
   return completeAngles(readTextAngles(text));
+}
+
+export function parsePointFlag(payload) {
+  const text = String(payload ?? "").trim();
+
+  if (!text) {
+    return false;
+  }
+
+  try {
+    const data = JSON.parse(text);
+
+    if (data && typeof data === "object" && !Array.isArray(data)) {
+      const pointEntry = Object.entries(data).find(([key]) => key.toLowerCase() === "point");
+
+      return pointEntry ? parsePointValue(pointEntry[1]) : false;
+    }
+  } catch {
+    // Plain text messages are parsed below.
+  }
+
+  const match = pointPattern.exec(text);
+  return match ? parsePointValue(match[1]) : false;
 }
 
 export function formatJointAngles(angles) {

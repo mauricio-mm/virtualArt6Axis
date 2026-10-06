@@ -10,8 +10,12 @@ test("joint payload formatter creates MQTT text accepted by the parser", () => {
   const angles = [0, -12.345, 90, 180, -0.001, 45.678];
   const payload = formatJointAnglesPayload(angles);
 
-  assert.equal(payload, "j1: 0.00, j2: -12.35, j3: 90.00, j4: 180.00, j5: 0.00, j6: 45.68");
+  assert.equal(
+    payload,
+    "j1: 0.00, j2: -12.35, j3: 90.00, j4: 180.00, j5: 0.00, j6: 45.68, point: true"
+  );
   assert.deepEqual(parseJointAnglesMessage(payload), [0, -12.35, 90, 180, 0, 45.68]);
+  assert.equal(parsePointFlag(payload), true);
 });
 
 test("joint payload formatter requires all six finite angles", () => {

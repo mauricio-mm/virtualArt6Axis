@@ -115,10 +115,12 @@ export function formatJointAnglesPayload(angles) {
     throw new Error("Os seis angulos das juntas sao necessarios para publicar.");
   }
 
-  return angles
+  const jointValues = angles
     .map((angle, index) => {
       const normalizedAngle = Math.abs(angle) < 0.005 ? 0 : angle;
       return `j${index + 1}: ${normalizedAngle.toFixed(2)}`;
     })
     .join(", ");
+
+  return `${jointValues}, point: true`;
 }

@@ -1,6 +1,7 @@
 import { createCollapsibleSection } from "./ui-utils.js";
 
 export function createMqttPanel({ onConnectionChange, onMessage }) {
+  const instanceId = crypto.randomUUID();
   const form = document.querySelector("#mqtt-content");
   const connectButton = document.querySelector("#mqtt-connect");
   const status = document.querySelector("#mqtt-status");
@@ -27,7 +28,18 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
   let eventSource = null;
   let eventStreamErrorShown = false;
 
+  if (configFields.clientId.value === "threejs-robot-arm") {
+    configFields.clientId.value = `threejs-robot-arm-${instanceId.slice(0, 8)}`;
+  }
+
   createCollapsibleSection("#mqtt-panel", "#mqtt-toggle");
+
+  function getApiUrl(path) {
+    const url = new URL(path, window.location.href);
+
+    url.searchParams.set("instanceId", instanceId);
+    return url.href;
+  }
 
   function createLogLine(type, message) {
     const line = document.createElement("div");
@@ -156,11 +168,11 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
   }
 
   async function getJson(url) {
-    return readJsonResponse(await fetch(url));
+    return readJsonResponse(await fetch(getApiUrl(url)));
   }
 
   async function postJson(url, body = {}) {
-    const response = await fetch(url, {
+    const response = await fetch(getApiUrl(url), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -176,7 +188,7 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
       return;
     }
 
-    eventSource = new EventSource("/api/mqtt/events");
+    eventSource = new EventSource(getApiUrl("/api/mqtt/events"));
     eventSource.addEventListener("open", () => {
       eventStreamErrorShown = false;
     });

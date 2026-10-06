@@ -27,7 +27,7 @@ export function createUi({ robot }) {
 
       if (modeControl.getMode() === operationModes.send) {
         return {
-          message: "Telemetria recebida ignorada: modo Enviar ativo.",
+          message: "Mensagem MQTT recebida ignorada: modo Enviar ativo.",
           type: "muted",
         };
       }

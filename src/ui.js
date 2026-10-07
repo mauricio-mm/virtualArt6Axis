@@ -62,7 +62,7 @@ export function createUi({ robot }) {
     const target = event.target;
     const isEditing =
       target instanceof HTMLElement &&
-      (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(target.tagName));
+      (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName));
 
     if (
       event.code !== "Space" ||
@@ -74,6 +74,11 @@ export function createUi({ robot }) {
     }
 
     event.preventDefault();
+
+    // Tira o foco do botao para que o Espaco nao o acione ao soltar a tecla.
+    if (target instanceof HTMLButtonElement) {
+      target.blur();
+    }
 
     const angles = robot.getJointAnglesDegrees();
     const payload = formatJointAnglesPayload(angles);

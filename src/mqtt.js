@@ -131,6 +131,7 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
 
     lastRevision = revision;
     applyConfig(snapshot.config);
+    configFields.password.placeholder = snapshot.hasSavedPassword ? "Salva no .env" : "";
     isConnected = snapshot.state === "connected";
     isConnecting = snapshot.state === "connecting";
     isSyncing = false;

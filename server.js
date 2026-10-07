@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import mqtt from "mqtt";
+import { readEnvFile, writeEnvValues } from "./env-file.js";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const host = process.env.HOST || "127.0.0.1";
@@ -12,6 +13,18 @@ const port = Number(process.env.PORT) || 3000;
 const serverInstanceId = randomUUID();
 const mqttSessions = new Map();
 const mqttSessionCleanupDelayMs = 15000;
+const envFilePath = path.join(rootDir, ".env");
+const mqttEnvKeys = {
+  commandTopic: "MQTT_COMMAND_TOPIC",
+  host: "MQTT_HOST",
+  password: "MQTT_PASSWORD",
+  port: "MQTT_PORT",
+  protocol: "MQTT_PROTOCOL",
+  rejectUnauthorized: "MQTT_REJECT_UNAUTHORIZED",
+  telemetryTopic: "MQTT_TELEMETRY_TOPIC",
+  username: "MQTT_USERNAME",
+};
+let savedMqttConfig = await loadSavedMqttConfig();
 
 const mimeTypes = {
   ".css": "text/css; charset=utf-8",
@@ -24,6 +37,88 @@ const mimeTypes = {
   ".svg": "image/svg+xml",
   ".webp": "image/webp",
 };
+
+async function loadSavedMqttConfig() {
+  let env;
+
+  try {
+    env = await readEnvFile(envFilePath);
+  } catch (error) {
+    console.error(`Nao foi possivel ler ${envFilePath}:`, error.message);
+    return null;
+  }
+
+  if (!env.MQTT_HOST) {
+    return null;
+  }
+
+  const config = Object.fromEntries(
+    Object.entries(mqttEnvKeys)
+      .filter(([, envKey]) => Object.hasOwn(env, envKey))
+      .map(([key, envKey]) => [key, env[envKey]])
+  );
+
+  if (Object.hasOwn(config, "rejectUnauthorized")) {
+    config.rejectUnauthorized = !["false", "0", "no"].includes(
+      config.rejectUnauthorized.trim().toLowerCase()
+    );
+  }
+
+  try {
+    return toSavedMqttConfig(normalizeMqttConfig(config));
+  } catch (error) {
+    console.error(`Configuracao MQTT invalida em ${envFilePath}:`, error.message);
+    return null;
+  }
+}
+
+// O clientId fica de fora: cada aba do visualizador precisa do seu proprio.
+function toSavedMqttConfig(config) {
+  const { clientId, ...savedConfig } = config;
+
+  return savedConfig;
+}
+
+function isSavedMqttConfig(config) {
+  return Boolean(savedMqttConfig) && Object.keys(mqttEnvKeys).every(
+    (key) => savedMqttConfig[key] === config[key]
+  );
+}
+
+async function saveMqttConfig(session, config) {
+  const values = Object.fromEntries(
+    Object.entries(mqttEnvKeys).map(([key, envKey]) => [envKey, String(config[key] ?? "")])
+  );
+
+  try {
+    await writeEnvValues(envFilePath, values);
+    savedMqttConfig = toSavedMqttConfig(config);
+    broadcastMqttLog(session, "muted", "Dados de conexao salvos no .env.");
+  } catch (error) {
+    broadcastMqttLog(session, "error", `Erro ao salvar o .env: ${error.message}`);
+  }
+}
+
+function getPublicMqttConfig(config) {
+  return config
+    ? Object.fromEntries(Object.entries(config).filter(([key]) => key !== "password"))
+    : null;
+}
+
+// Campo de senha vazio reaproveita a senha salva no .env para o mesmo broker e usuario.
+function applySavedPassword(config) {
+  if (
+    config.password ||
+    !savedMqttConfig?.password ||
+    config.host !== savedMqttConfig.host ||
+    config.port !== savedMqttConfig.port ||
+    config.username !== savedMqttConfig.username
+  ) {
+    return config;
+  }
+
+  return { ...config, password: savedMqttConfig.password };
+}
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
@@ -82,12 +177,9 @@ function getMqttSession(requestUrl) {
 }
 
 function getMqttSnapshot(session) {
-  const publicConfig = session.config
-    ? Object.fromEntries(Object.entries(session.config).filter(([key]) => key !== "password"))
-    : null;
-
   return {
-    config: publicConfig,
+    config: getPublicMqttConfig(session.config ?? savedMqttConfig),
+    hasSavedPassword: Boolean(savedMqttConfig?.password),
     instanceId: session.id,
     revision: session.revision,
     serverInstanceId,
@@ -221,7 +313,7 @@ function hasSameMqttConfig(left, right) {
 }
 
 function connectMqtt(session, config) {
-  const nextConfig = normalizeMqttConfig(config);
+  const nextConfig = applySavedPassword(normalizeMqttConfig(config));
 
   if (
     session.client &&
@@ -261,6 +353,10 @@ function connectMqtt(session, config) {
 
     setMqttState(session, "connected");
     broadcastMqttLog(session, "in", `CONNACK ${nextConfig.url}`);
+
+    if (!isSavedMqttConfig(nextConfig)) {
+      saveMqttConfig(session, nextConfig);
+    }
 
     const subscriptionTopics = [
       ...new Set([nextConfig.telemetryTopic, nextConfig.commandTopic].filter(Boolean)),

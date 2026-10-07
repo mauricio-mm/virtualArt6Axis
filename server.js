@@ -165,6 +165,7 @@ function normalizeMqttConfig(config) {
     password: String(config.password || ""),
     port: String(portValue),
     protocol,
+    rejectUnauthorized: config.rejectUnauthorized !== false,
     telemetryTopic: String(config.telemetryTopic || "robot/telemetry").trim(),
     username: String(config.username || ""),
     url: `${protocol}://${host}:${portValue}`,
@@ -213,6 +214,7 @@ function hasSameMqttConfig(left, right) {
     "password",
     "port",
     "protocol",
+    "rejectUnauthorized",
     "telemetryTopic",
     "username",
   ].every((key) => left[key] === right[key]);
@@ -240,13 +242,17 @@ function connectMqtt(session, config) {
     keepalive: 30,
     password: nextConfig.password || undefined,
     reconnectPeriod: 0,
-    rejectUnauthorized: nextConfig.protocol === "mqtts" ? true : undefined,
+    rejectUnauthorized: nextConfig.protocol === "mqtts" ? nextConfig.rejectUnauthorized : undefined,
     username: nextConfig.username || undefined,
   });
 
   session.client = client;
   setMqttState(session, "connecting");
   broadcastMqttLog(session, "out", `CONNECT ${nextConfig.url}`);
+
+  if (nextConfig.protocol === "mqtts" && !nextConfig.rejectUnauthorized) {
+    broadcastMqttLog(session, "muted", "Aviso: certificado TLS do broker nao sera validado.");
+  }
 
   client.on("connect", () => {
     if (session.client !== client) {

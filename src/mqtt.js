@@ -17,6 +17,7 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
     password: document.querySelector("#mqtt-password"),
     port: document.querySelector("#mqtt-port"),
     protocol: document.querySelector("#mqtt-protocol"),
+    rejectUnauthorized: document.querySelector("#mqtt-reject-unauthorized"),
     telemetryTopic: document.querySelector("#mqtt-telemetry-topic"),
     username: document.querySelector("#mqtt-username"),
   };
@@ -91,6 +92,7 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
       password: configFields.password.value,
       port,
       protocol,
+      rejectUnauthorized: configFields.rejectUnauthorized.checked,
       telemetryTopic: configFields.telemetryTopic.value.trim(),
       username: configFields.username.value.trim(),
       url: `${protocol}://${host}:${port}`,
@@ -103,7 +105,13 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
     }
 
     Object.entries(configFields).forEach(([key, field]) => {
-      if (Object.hasOwn(config, key)) {
+      if (!Object.hasOwn(config, key)) {
+        return;
+      }
+
+      if (field.type === "checkbox") {
+        field.checked = config[key] !== false;
+      } else {
         field.value = config[key] ?? "";
       }
     });
@@ -153,6 +161,10 @@ export function createMqttPanel({ onConnectionChange, onMessage }) {
     fields.forEach((field) => {
       field.disabled = field.readOnly || isSyncing || isConnected || isConnecting;
     });
+
+    if (config.protocol !== "mqtts") {
+      configFields.rejectUnauthorized.disabled = true;
+    }
 
     publishButton.disabled = !isConnected;
     publishPayload.disabled = !isConnected;

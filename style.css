@@ -285,6 +285,19 @@ textarea {
   padding: 0 10px;
 }
 
+.checkbox-field {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.checkbox-field input {
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
 input,
 select {
   min-height: 34px;

@@ -40,6 +40,18 @@
           </div>
         </section>
 
+        <section class="display-section trajectory-options" aria-label="Medidas da trajetoria">
+          <div class="section-title-row"><span>Medidas da trajetória</span></div>
+          <label class="checkbox-field">
+            <input id="show-point-coordinates" type="checkbox" />
+            <span>Exibir coordenadas dos pontos (X, Y, Z)</span>
+          </label>
+          <label class="checkbox-field">
+            <input id="show-segment-distances" type="checkbox" />
+            <span>Exibir comprimento das retas (mm)</span>
+          </label>
+        </section>
+
         <section
           id="dh-panel"
           class="display-section collapsible-section is-collapsed"
@@ -138,7 +150,7 @@
             <section class="mqtt-publish-panel" aria-label="Publicar MQTT">
               <label class="form-field">
                 <span>Payload para publicar</span>
-                <textarea id="mqtt-publish-payload" rows="4">{ "msg": "hello" }</textarea>
+                <textarea id="mqtt-publish-payload" rows="4">{ "CH-0": 0, "CH-1": 0, "CH-2": 0, "CH-3": 0, "CH-4": 0, "CH-5": 0 }</textarea>
               </label>
               <button id="mqtt-publish" class="control-button" type="button" disabled>Publicar</button>
             </section>

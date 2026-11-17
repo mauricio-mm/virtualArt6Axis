@@ -37,6 +37,38 @@ function shortestAngleTarget(current, target) {
   return current + delta;
 }
 
+// Etiquetas que acompanham os pontos/segmentos na cena 3D.
+function createTelemetryLabel(text, textColor = "#ffffff") {
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  context.font = "600 22px Arial, sans-serif";
+  canvas.width = Math.ceil(context.measureText(text).width + 24);
+  canvas.height = 48;
+
+  context.fillStyle = "rgba(12, 18, 26, 0.88)";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.strokeStyle = "rgba(255, 255, 255, 0.42)";
+  context.lineWidth = 2;
+  context.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+  context.font = "600 22px Arial, sans-serif";
+  context.fillStyle = textColor;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false }));
+  label.scale.set(canvas.width * 0.006, canvas.height * 0.006, 1);
+  label.renderOrder = 10;
+  return label;
+}
+
+function disposeTelemetryLabel(label) {
+  label.material.map?.dispose();
+  label.material.dispose();
+}
+
 function createJointLabel(label) {
   const canvas = document.createElement("canvas");
   canvas.width = 128;
@@ -169,13 +201,36 @@ export class RobotArm {
 
     this.telemetryPoints = new THREE.Group();
     this.telemetryPoints.name = "telemetryPoints";
+    this.telemetryPointNumber = 0;
+    this.telemetryCoordinateLabels = new THREE.Group();
+    this.telemetryCoordinateLabels.name = "telemetryCoordinateLabels";
+    this.telemetryCoordinateLabels.visible = false;
+    this.telemetryDistanceLabels = new THREE.Group();
+    this.telemetryDistanceLabels.name = "telemetryDistanceLabels";
+    this.telemetryDistanceLabels.visible = false;
     this.telemetryPointGeometry = new THREE.SphereGeometry(telemetryPointRadius, 12, 8);
     this.telemetryPointMaterial = new THREE.MeshBasicMaterial({ color: 0x5eead4 });
+    this.telemetryLinePositions = new Float32Array(maxTelemetryPoints * 3);
+    this.telemetryLineGeometry = new THREE.BufferGeometry();
+    this.telemetryLineGeometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(this.telemetryLinePositions, 3).setUsage(THREE.DynamicDrawUsage)
+    );
+    this.telemetryLineGeometry.setDrawRange(0, 0);
+    this.telemetryLine = new THREE.Line(
+      this.telemetryLineGeometry,
+      new THREE.LineBasicMaterial({ color: 0x5eead4 })
+    );
+    this.telemetryLine.name = "telemetryLine";
+    this.telemetryLine.frustumCulled = false;
 
     this.group.add(
       this.models,
       this.workspace,
       this.telemetryPoints,
+      this.telemetryLine,
+      this.telemetryCoordinateLabels,
+      this.telemetryDistanceLabels,
       this.link,
       this.endEffector,
       this.target,
@@ -311,18 +366,91 @@ export class RobotArm {
     return kinematics.endPosition.clone();
   }
 
+  createCoordinateLabel(marker) {
+    const { pointNumber, positionMm } = marker.userData;
+    const text = `P${pointNumber}  X:${positionMm.x.toFixed(1)}  Y:${positionMm.y.toFixed(1)}  Z:${positionMm.z.toFixed(1)} mm`;
+    const label = createTelemetryLabel(text, "#a6f1e4");
+    label.position.copy(marker.position).add(new THREE.Vector3(0, 0, 0.35));
+    return label;
+  }
+
+  createDistanceLabel(previous, current) {
+    const distance = previous.userData.positionMm.distanceTo(current.userData.positionMm);
+    const text = `P${previous.userData.pointNumber}-P${current.userData.pointNumber}: ${distance.toFixed(1)} mm`;
+    const label = createTelemetryLabel(text, "#ffd993");
+    label.position.copy(previous.position).add(current.position).multiplyScalar(0.5);
+    label.position.z -= 0.3;
+    return label;
+  }
+
+  clearTelemetryLabels(group) {
+    group.children.forEach(disposeTelemetryLabel);
+    group.clear();
+  }
+
+  removeFirstTelemetryLabel(group) {
+    const first = group.children[0];
+    if (!first) return;
+    group.remove(first);
+    disposeTelemetryLabel(first);
+  }
+
+  setTelemetryCoordinatesVisible(visible) {
+    const group = this.telemetryCoordinateLabels;
+    if (group.visible === Boolean(visible)) return;
+    group.visible = Boolean(visible);
+    if (group.visible) {
+      this.telemetryPoints.children.forEach((marker) => group.add(this.createCoordinateLabel(marker)));
+    } else {
+      this.clearTelemetryLabels(group);
+    }
+  }
+
+  setTelemetryDistancesVisible(visible) {
+    const group = this.telemetryDistanceLabels;
+    if (group.visible === Boolean(visible)) return;
+    group.visible = Boolean(visible);
+    if (group.visible) {
+      const points = this.telemetryPoints.children;
+      for (let index = 1; index < points.length; index += 1) {
+        group.add(this.createDistanceLabel(points[index - 1], points[index]));
+      }
+    } else {
+      this.clearTelemetryLabels(group);
+    }
+  }
+
   addTelemetryPoint(anglesDegrees = null) {
     const positionMm = anglesDegrees
       ? this.calculateEndEffectorPositionMm(anglesDegrees)
       : this.kinematics.endPosition.clone();
     const marker = new THREE.Mesh(this.telemetryPointGeometry, this.telemetryPointMaterial);
+    const previous = this.telemetryPoints.children.at(-1);
 
     marker.position.copy(dhToThree(positionMm));
     marker.userData.role = "telemetryPoint";
+    marker.userData.positionMm = positionMm.clone();
+    marker.userData.pointNumber = ++this.telemetryPointNumber;
     this.telemetryPoints.add(marker);
 
-    while (this.telemetryPoints.children.length > maxTelemetryPoints) {
+    if (this.telemetryPoints.children.length > maxTelemetryPoints) {
       this.telemetryPoints.remove(this.telemetryPoints.children[0]);
+      this.telemetryLinePositions.copyWithin(0, 3);
+      this.removeFirstTelemetryLabel(this.telemetryCoordinateLabels);
+      this.removeFirstTelemetryLabel(this.telemetryDistanceLabels);
+    }
+
+    const lastIndex = this.telemetryPoints.children.length - 1;
+    const linePosition = this.telemetryLineGeometry.getAttribute("position");
+    linePosition.setXYZ(lastIndex, marker.position.x, marker.position.y, marker.position.z);
+    linePosition.needsUpdate = true;
+    this.telemetryLineGeometry.setDrawRange(0, this.telemetryPoints.children.length);
+
+    if (this.telemetryCoordinateLabels.visible) {
+      this.telemetryCoordinateLabels.add(this.createCoordinateLabel(marker));
+    }
+    if (this.telemetryDistanceLabels.visible && previous) {
+      this.telemetryDistanceLabels.add(this.createDistanceLabel(previous, marker));
     }
 
     return positionMm;

@@ -3,35 +3,46 @@ import test from "node:test";
 import {
   formatJointAnglesPayload,
   parseJointAnglesMessage,
-  parsePointFlag,
 } from "../src/joint-message.js";
 
-test("joint payload formatter creates MQTT text accepted by the parser", () => {
+test("MQTT: envia CH-0 a CH-5 em JSON sem point ou set", () => {
   const angles = [0, -12.345, 90, 180, -0.001, 45.678];
   const payload = formatJointAnglesPayload(angles);
 
   assert.equal(
     payload,
-    "j1: 0.00, j2: -12.35, j3: 90.00, j4: 180.00, j5: 0.00, j6: 45.68, point: true"
+    '{"CH-0": 0.00, "CH-1": -12.35, "CH-2": 90.00, "CH-3": 180.00, "CH-4": 0.00, "CH-5": 45.68}'
   );
   assert.deepEqual(parseJointAnglesMessage(payload), [0, -12.35, 90, 180, 0, 45.68]);
-  assert.equal(parsePointFlag(payload), true);
+  assert.deepEqual(Object.keys(JSON.parse(payload)), ["CH-0", "CH-1", "CH-2", "CH-3", "CH-4", "CH-5"]);
 });
 
-test("joint payload formatter requires all six finite angles", () => {
+test("MQTT: exige seis angulos finitos ao enviar", () => {
   assert.throws(() => formatJointAnglesPayload([0, 1, 2]), /seis angulos/);
   assert.throws(() => formatJointAnglesPayload([0, 1, 2, 3, 4, Number.NaN]), /seis angulos/);
 });
 
-test("point flag is read from JSON and plain MQTT payloads", () => {
-  assert.equal(parsePointFlag('{"j1": 0, "point": true}'), true);
-  assert.equal(parsePointFlag('{"POINT": "false"}'), false);
-  assert.equal(parsePointFlag("j1: 10, point: true"), true);
-  assert.equal(parsePointFlag("point=0"), false);
+test("MQTT: recebe objeto JSON com canais CH-0 a CH-5", () => {
+  assert.deepEqual(
+    parseJointAnglesMessage('{"CH-0": "1.5", "CH-1": -2, "CH-2": 3, "CH-3": 4, "CH-4": 5, "CH-5": 6}'),
+    [1.5, -2, 3, 4, 5, 6]
+  );
 });
 
-test("missing or invalid point flags default to false", () => {
-  assert.equal(parsePointFlag("j1: 10, j2: 20"), false);
-  assert.equal(parsePointFlag('{"point": "maybe"}'), false);
-  assert.equal(parsePointFlag(""), false);
+test("MQTT: recebe texto sem chaves JSON com CH-0 a CH-5", () => {
+  assert.deepEqual(
+    parseJointAnglesMessage('"CH-0": 0, "CH-1": -12.35, "CH-2": 90, "CH-3": 180, "CH-4": 0, "CH-5": 45.68'),
+    [0, -12.35, 90, 180, 0, 45.68]
+  );
+  assert.deepEqual(
+    parseJointAnglesMessage('CH-0=1,5; CH-1=2; CH-2=3; CH-3=4; CH-4=5; CH-5=6'),
+    [1.5, 2, 3, 4, 5, 6]
+  );
+});
+
+test("MQTT: ignora mensagens sem os seis canais validos", () => {
+  assert.equal(parseJointAnglesMessage(''), null);
+  assert.equal(parseJointAnglesMessage('{"CH-0": 0, "CH-1": 1}'), null);
+  assert.equal(parseJointAnglesMessage('j1: 0, j2: 1, j3: 2, j4: 3, j5: 4, j6: 5'), null);
+  assert.equal(parseJointAnglesMessage('{"CH-0": 0, "CH-1": 1, "CH-2": 2, "CH-3": 3, "CH-4": 4, "CH-5": "invalid"}'), null);
 });

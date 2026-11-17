@@ -3,7 +3,6 @@ import {
   formatJointAngles,
   formatJointAnglesPayload,
   parseJointAnglesMessage,
-  parsePointFlag,
 } from "./joint-message.js";
 import { createMqttPanel } from "./mqtt.js";
 import { createOperationModeControl, operationModes } from "./operation-mode.js";
@@ -13,15 +12,21 @@ export function createUi({ robot }) {
   const dhPanel = createDhPanel();
   const modeControl = createOperationModeControl();
 
+  document.querySelector("#show-point-coordinates").addEventListener("change", (event) => {
+    robot.setTelemetryCoordinatesVisible(event.target.checked);
+  });
+  document.querySelector("#show-segment-distances").addEventListener("change", (event) => {
+    robot.setTelemetryDistancesVisible(event.target.checked);
+  });
+
   const mqttPanel = createMqttPanel({
     onConnectionChange() {
       robot.setWorkspaceVisible(false);
     },
     onMessage({ payload }) {
       const angles = parseJointAnglesMessage(payload);
-      const shouldCreatePoint = parsePointFlag(payload);
 
-      if (!angles && !shouldCreatePoint) {
+      if (!angles) {
         return null;
       }
 
@@ -32,27 +37,14 @@ export function createUi({ robot }) {
         };
       }
 
-      let terminalMm = null;
-
-      if (angles) {
-        terminalMm = robot.calculateEndEffectorPositionMm(angles);
-        robot.setJointAnglesDegrees(angles);
-        updateRobot();
-      }
-
-      if (shouldCreatePoint) {
-        const pointMm = robot.addTelemetryPoint(angles);
-
-        return {
-          message: angles
-            ? `Trajetoria FK iniciada: ${formatJointAngles(angles)} | ponto criado em ${formatPositionMm(pointMm)}`
-            : `Ponto criado na posicao atual: ${formatPositionMm(pointMm)}`,
-          type: "muted",
-        };
-      }
+      // Cada mensagem MQTT valida registra um ponto no espaco 3D,
+      // sem depender de um campo adicional "point" ou "set".
+      const pointMm = robot.addTelemetryPoint(angles);
+      robot.setJointAnglesDegrees(angles);
+      updateRobot();
 
       return {
-        message: `Trajetoria FK iniciada: ${formatJointAngles(angles)} | terminal ${formatPositionMm(terminalMm)}`,
+        message: `Trajetoria FK iniciada: ${formatJointAngles(angles)} | ponto criado em ${formatPositionMm(pointMm)}`,
         type: "muted",
       };
     },

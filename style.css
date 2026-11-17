@@ -292,6 +292,20 @@ textarea {
   cursor: pointer;
 }
 
+.trajectory-options {
+  display: grid;
+  gap: 10px;
+}
+
+.trajectory-options .section-title-row {
+  margin-bottom: 0;
+}
+
+.trajectory-options .checkbox-field {
+  color: #d4e0ea;
+  font-size: 12px;
+}
+
 .checkbox-field input {
   width: auto;
   margin: 0;

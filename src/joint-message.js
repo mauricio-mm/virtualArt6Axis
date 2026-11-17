@@ -1,6 +1,5 @@
 const JOINT_COUNT = 6;
-const jointPattern = /\bj\s*([1-6])\s*[:=]\s*(-?\d+(?:[.,]\d+)?)/gi;
-const pointPattern = /\bpoint\s*[:=]\s*(true|false|1|0)\b/i;
+const channelPattern = /\bCH-([0-5])\b["']?\s*[:=]\s*["']?(-?\d+(?:[.,]\d+)?)/gi;
 
 function parseAngle(value) {
   const angle = Number(String(value).trim().replace(",", "."));
@@ -11,13 +10,8 @@ function readObjectAngles(data) {
   const angles = new Array(JOINT_COUNT).fill(null);
 
   for (let index = 0; index < JOINT_COUNT; index += 1) {
-    const jointNumber = index + 1;
-    const value =
-      data[`j${jointNumber}`] ??
-      data[`J${jointNumber}`] ??
-      data[`joint${jointNumber}`] ??
-      data[`theta${jointNumber}`];
-    angles[index] = parseAngle(value);
+    const entry = Object.entries(data).find(([key]) => key.toUpperCase() === `CH-${index}`);
+    angles[index] = entry ? parseAngle(entry[1]) : null;
   }
 
   return angles;
@@ -25,38 +19,21 @@ function readObjectAngles(data) {
 
 function readTextAngles(text) {
   const angles = new Array(JOINT_COUNT).fill(null);
-  let match = jointPattern.exec(text);
+  let match = channelPattern.exec(text);
 
   while (match) {
-    const index = Number(match[1]) - 1;
-    angles[index] = parseAngle(match[2]);
-    match = jointPattern.exec(text);
+    angles[Number(match[1])] = parseAngle(match[2]);
+    match = channelPattern.exec(text);
   }
 
-  jointPattern.lastIndex = 0;
+  channelPattern.lastIndex = 0;
   return angles;
 }
 
 function completeAngles(angles) {
-  return angles.every((angle) => Number.isFinite(angle)) ? angles : null;
-}
-
-function parsePointValue(value) {
-  if (typeof value === "boolean") {
-    return value;
-  }
-
-  const normalized = String(value ?? "").trim().toLowerCase();
-
-  if (["true", "1"].includes(normalized)) {
-    return true;
-  }
-
-  if (["false", "0"].includes(normalized)) {
-    return false;
-  }
-
-  return false;
+  return angles.length === JOINT_COUNT && angles.every((angle) => Number.isFinite(angle))
+    ? angles
+    : null;
 }
 
 export function parseJointAnglesMessage(payload) {
@@ -77,33 +54,10 @@ export function parseJointAnglesMessage(payload) {
       return completeAngles(readObjectAngles(data));
     }
   } catch {
-    // Plain text messages are parsed below.
+    // Aceita tambem mensagens de texto com CH-0: valor, CH-1: valor, etc.
   }
 
   return completeAngles(readTextAngles(text));
-}
-
-export function parsePointFlag(payload) {
-  const text = String(payload ?? "").trim();
-
-  if (!text) {
-    return false;
-  }
-
-  try {
-    const data = JSON.parse(text);
-
-    if (data && typeof data === "object" && !Array.isArray(data)) {
-      const pointEntry = Object.entries(data).find(([key]) => key.toLowerCase() === "point");
-
-      return pointEntry ? parsePointValue(pointEntry[1]) : false;
-    }
-  } catch {
-    // Plain text messages are parsed below.
-  }
-
-  const match = pointPattern.exec(text);
-  return match ? parsePointValue(match[1]) : false;
 }
 
 export function formatJointAngles(angles) {
@@ -115,12 +69,10 @@ export function formatJointAnglesPayload(angles) {
     throw new Error("Os seis angulos das juntas sao necessarios para publicar.");
   }
 
-  const jointValues = angles
-    .map((angle, index) => {
-      const normalizedAngle = Math.abs(angle) < 0.005 ? 0 : angle;
-      return `j${index + 1}: ${normalizedAngle.toFixed(2)}`;
-    })
-    .join(", ");
+  const channels = angles.map((angle, index) => {
+    const normalizedAngle = Math.abs(angle) < 0.005 ? 0 : angle;
+    return `"CH-${index}": ${normalizedAngle.toFixed(2)}`;
+  });
 
-  return `${jointValues}, point: true`;
+  return `{${channels.join(", ")}}`;
 }

@@ -29,7 +29,7 @@ function render(time = 0) {
     ui.updateRobot();
   }
 
-  robotScene.renderer.render(robotScene.scene, robotScene.camera);
+  robotScene.render();
   requestAnimationFrame(render);
 }
 

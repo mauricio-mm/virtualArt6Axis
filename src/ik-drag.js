@@ -24,15 +24,18 @@ export function createIkDrag({ canvas, camera, robot, onRobotChange }) {
     updatePointer(event);
     raycaster.setFromCamera(pointer, camera);
 
-    return raycaster.intersectObjects(robot.getInteractiveObjects(), false)[0]?.object ?? null;
+    // GLB tem Meshes filhos: a busca precisa ser recursiva.
+    return raycaster.intersectObjects(robot.getInteractiveObjects(), true)[0]?.object ?? null;
   }
 
   function start(event) {
-    const pickedObject = pickRobotObject(event);
+    // Botoes secundario/central e Shift ficam reservados para mover a camera.
+    if (event.button !== 0 || event.shiftKey) return false;
 
-    if (!pickedObject) {
-      return false;
-    }
+    const pickedObject = pickRobotObject(event);
+    robot.setTerminalSelected(Boolean(pickedObject));
+
+    if (!pickedObject) return false;
 
     robot.activateTarget();
     robot.solveToTarget();
@@ -97,6 +100,7 @@ export function createIkDrag({ canvas, camera, robot, onRobotChange }) {
   canvas.addEventListener("pointermove", updateHover);
   canvas.addEventListener("pointerup", end);
   canvas.addEventListener("pointercancel", end);
+  canvas.addEventListener("pointerleave", () => canvas.classList.remove("is-pickable"));
 
   return { start };
 }

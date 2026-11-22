@@ -4,25 +4,30 @@ const DEG_TO_RAD = Math.PI / 180;
 const identityMatrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 export const DH_TO_THREE_SCALE = 0.01;
 export const THREE_TO_DH_SCALE = 1 / DH_TO_THREE_SCALE;
-export const linkLengthsMm = Object.freeze({
-  j3ToJ4: 252.5,
-  j4ToJ5: 158.9,
-  j5ToJ6: 152.0,
-});
-
+// Hipotese de montagem: os eixos J2/J3 fazem flexao e J4 faz roll longitudinal.
+// O +90 em J3 e uma escolha de referencial para alinhar z3 ao perfil J3->J4,
+// NAO e um offset medido no potenciometro. Validar a postura de referencia real.
+// Os 252,5 e 158,9 mm sao elos fisicos distintos, mas colineares no modelo DH.
+export const J3_J4_MM = 252.5;
+export const J4_J5_MM = 158.9;
+export const J5_J6_MM = 152.0;
+export const TOOL_LENGTH_MM = 40.0;
 export const dhDefinitions = [
-  { name: "J1", theta: 0, thetaOffset: 0, d: 229.4, a: 0.0, alpha: -90, min: -180, max: 180 },
-  { name: "J2", theta: 0, thetaOffset: 0, d: 0.0, a: 250.2, alpha: 0, min: -180, max: 180 },
-  { name: "J3", theta: 0, thetaOffset: 90, d: 0.0, a: 0.0, alpha: 90, min: -180, max: 180 },
-  { name: "J4", theta: 0, thetaOffset: 0, d: linkLengthsMm.j3ToJ4 + linkLengthsMm.j4ToJ5, a: 0.0, alpha: -90, min: -180, max: 180 },
-  { name: "J5", theta: 0, thetaOffset: -90, d: 0.0, a: linkLengthsMm.j5ToJ6, alpha: 0, min: -180, max: 180 },
-  { name: "J6", theta: 0, thetaOffset: 0, d: 0.0, a: 0.0, alpha: 0, min: -180, max: 180 },
+  { name: "J1", theta: 0, thetaOffset: 0, d: 229.4, a: 0, alpha: 90, min: -180, max: 180 },
+  { name: "J2", theta: 0, thetaOffset: 0, d: 0, a: 250.2, alpha: 0, min: -180, max: 180 },
+  { name: "J3", theta: 0, thetaOffset: 90, d: 0, a: 0, alpha: 90, min: -180, max: 180 },
+  { name: "J4", theta: 0, thetaOffset: 0, d: J3_J4_MM + J4_J5_MM, a: 0, alpha: -90, min: -180, max: 180 },
+  // O eixo da J6 coincide com o segmento J5--J6 quando theta5 = 0.
+  // J5 continua sendo um eixo de flexao perpendicular ao roll J4.
+  { name: "J5", theta: 0, thetaOffset: 0, d: 0, a: 0, alpha: 90, min: -180, max: 180 },
+  // J6: rotacao longitudinal em torno de z5 (alinhado ao segmento terminal).
+  { name: "J6", theta: 0, thetaOffset: 0, d: J5_J6_MM, a: 0, alpha: 0, min: -180, max: 180 },
 ];
 
 export const workspaceRadiusMm = dhDefinitions.reduce(
   (radius, joint) => radius + Math.hypot(joint.d, joint.a),
   0
-);
+) + TOOL_LENGTH_MM;
 export const workspaceRadius = workspaceRadiusMm * DH_TO_THREE_SCALE;
 
 export function createJointState() {
@@ -111,10 +116,14 @@ export function computeForwardKinematics(joints) {
     positions.push(transformOrigin(transform));
   }
 
+  // Matriz do TCP separada da sexta junta: a ponta esta 40 mm a frente
+  // no eixo z6. A sexta junta gira o orgao terminal sem mover o TCP.
+  const tcpMatrix = multiplyMatrix(transform, createDhMatrix(0, TOOL_LENGTH_MM, 0, 0));
   return {
     axes,
     cumulativeMatrices,
-    endPosition: positions[positions.length - 1],
+    endPosition: transformOrigin(tcpMatrix),
+    tcpMatrix,
     jointMatrices,
     localMatrices,
     origins,
@@ -122,19 +131,18 @@ export function computeForwardKinematics(joints) {
   };
 }
 
+// A origem DH da J4 coincide com a J3 neste referencial, mas o eixo fisico
+// da J4 fica a 252,5 mm ao longo de z3. Ela gira em torno dessa mesma reta.
+// Expor posicoes fisicas separadas impede que o visualizador una dois elos.
 export function getPhysicalJointPositions(state) {
-  const physicalJ4 = state.origins[3]
-    .clone()
-    .addScaledVector(state.axes[3], linkLengthsMm.j3ToJ4);
-
-  return [
-    state.positions[0],
-    state.positions[1],
-    state.positions[2],
-    physicalJ4,
-    state.positions[4],
-    state.positions[5],
-  ];
+  const physical = state.origins.map((origin) => origin.clone());
+  const frame3 = state.cumulativeMatrices[2];
+  const z3 = new THREE.Vector3(frame3[2], frame3[6], frame3[10]).normalize();
+  physical[3] = physical[2].clone().addScaledVector(z3, J3_J4_MM);
+  // O zero de d5/a5 coloca a origem DH antes de J6 sobre o centro da J5.
+  // O centro fisico da J6 fica apos a translacao d6, no eixo longitudinal.
+  physical[5] = transformOrigin(state.cumulativeMatrices[5]);
+  return physical;
 }
 
 export function solveIk(joints, target, options = {}) {

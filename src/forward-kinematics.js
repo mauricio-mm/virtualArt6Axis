@@ -20,7 +20,8 @@ export function calculateForwardKinematics(joints = createJointState()) {
     cumulativeMatrices: state.cumulativeMatrices,
     cumulativeMatrixRows: state.cumulativeMatrices.map(matrixToRows),
     endEffectorDh: state.endPosition,
-    endEffectorThree: positionsThree[positionsThree.length - 1],
+    endEffectorThree: dhToThree(state.endPosition),
+    tcpMatrix: state.tcpMatrix,
     joints,
     localMatrices: state.localMatrices,
     localMatrixRows: state.localMatrices.map(matrixToRows),
@@ -44,7 +45,7 @@ export function applyForwardKinematicsAngles(joints, anglesDegrees) {
 
 export function getEndEffectorPose(joints = createJointState()) {
   const state = calculateForwardKinematics(joints);
-  const transform = state.cumulativeMatrices[state.cumulativeMatrices.length - 1];
+  const transform = state.tcpMatrix;
 
   return {
     matrix: transform,

@@ -9,6 +9,7 @@ import {
   solveIk,
   threeToDh,
   workspaceRadius,
+  DH_TO_THREE_SCALE,
 } from "./kinematics.js";
 import { applyForwardKinematicsAngles } from "./forward-kinematics.js";
 
@@ -19,11 +20,16 @@ const telemetryPointRadius = 0.08;
 const maxTelemetryPoints = 1000;
 const modelFiles = [
   { fileName: "base.glb", role: "base", visualScale: 1 },
-  { fileName: "art1.glb", jointIndex: 0, role: "link", visualScale: 1 },
-  { fileName: "art2.glb", jointIndex: 1, role: "link", visualScale: 1 },
-  { fileName: "art3.glb", jointIndex: 2, role: "link", visualScale: 1 },
-  { fileName: "art4.glb", jointIndex: 3, role: "link", visualScale: 1 },
-  { fileName: "art5.glb", jointIndex: 4, role: "link", visualScale: 1 },
+  // Modelos GLB sao apenas representacoes visuais; as matrizes DH nao
+  // dependem do tamanho ou da posicao dos arquivos CAD.
+  { fileName: "art1.glb", jointIndex: 0, fromPoint: 0, toPoint: 1, role: "link", visualScale: 1 },
+  { fileName: "art2.glb", jointIndex: 1, fromPoint: 1, toPoint: 2, role: "link", visualScale: 1 },
+  // art3 termina em J4 e pertence ao corpo movido por J3 (NAO por J4).
+  { fileName: "art3.glb", jointIndex: 2, fromPoint: 2, toPoint: 3, role: "link", visualScale: 1 },
+  // art4 parte do pivô J4: acompanha somente a rotacao longitudinal de J4.
+  { fileName: "art4.glb", jointIndex: 3, fromPoint: 3, toPoint: 4, role: "link", visualScale: 1 },
+  // J5 flexiona o ultimo segmento; J6 faz roll do orgao terminal.
+  { fileName: "art5.glb", jointIndex: 4, fromPoint: 4, toPoint: 5, role: "link", visualScale: 1 },
   { fileName: "orgaoterminal.glb", jointIndex: 5, role: "tool", visualScale: 1 },
 ];
 
@@ -105,9 +111,11 @@ export class RobotArm {
     this.models = new THREE.Group();
     this.models.name = "robotModels";
     this.loadedModels = new Map();
+    this.terminalSelected = false;
     this.joints = createJointState();
     this.kinematics = computeForwardKinematics(this.joints);
     this.zeroKinematics = computeForwardKinematics(createJointState());
+    // Sem marcadores laranja artificiais: selecao sera destacada no proprio GLB.
     this.motion = null;
     this.targetActive = false;
     this.targetPosition = dhToThree(this.kinematics.endPosition);
@@ -172,6 +180,8 @@ export class RobotArm {
       })
     );
     this.endEffector.userData.role = "endEffector";
+    // A ponta continua sendo calculada, mas nao exibimos mais a esfera laranja.
+    this.endEffector.visible = false;
 
     this.workspace = new THREE.Mesh(
       new THREE.SphereGeometry(workspaceRadius, 48, 24),
@@ -247,7 +257,10 @@ export class RobotArm {
 
   loadModels() {
     const loader = new GLTFLoader();
-    const zeroPoints = this.getPhysicalPoints(this.zeroKinematics);
+    const zeroPoints = [
+      ...this.getPhysicalPoints(this.zeroKinematics),
+      dhToThree(this.zeroKinematics.endPosition),
+    ];
 
     modelFiles.forEach((spec) => {
       const { fileName } = spec;
@@ -273,13 +286,18 @@ export class RobotArm {
           visualPivot.matrixAutoUpdate = false;
 
           if (spec.role === "tool") {
+            // O pivot do orgao terminal coincide com a J6 REAL, nao com
+            // a origem anterior de d6. O eixo local -Z do GLB aponta
+            // para frente apos um giro de 180 graus em Y.
             const zeroWorldMatrix = dhMatrixToThree(
-              this.zeroKinematics.jointMatrices[spec.jointIndex]
+              this.zeroKinematics.cumulativeMatrices[spec.jointIndex]
             );
-
-            zeroWorldMatrix.setPosition(zeroPoints[spec.jointIndex]);
             model.scale.setScalar(spec.visualScale);
-            model.rotation.x = Math.PI / 2;
+            model.rotation.y = Math.PI;
+            // O corpo principal do GLB tem eixo longitudinal proximo de
+            // x=0,25, y=0,01 (unidades do CAD). Centralizar esse eixo no
+            // pivot impede que a ferramenta orbite como um cotovelo.
+            model.position.set(0.25, -0.01, 0);
             visualPivot.matrix.copy(zeroWorldMatrix);
             visualPivot.add(model);
             this.models.add(visualPivot);
@@ -294,8 +312,8 @@ export class RobotArm {
             return;
           }
 
-          const start = zeroPoints[spec.jointIndex];
-          const direction = zeroPoints[spec.jointIndex + 1].clone().sub(start);
+          const start = zeroPoints[spec.fromPoint];
+          const direction = zeroPoints[spec.toPoint].clone().sub(start);
           const length = direction.length();
           const barLength = bounds.max.y - bounds.min.y;
 
@@ -342,7 +360,7 @@ export class RobotArm {
       this.motion = null;
       this.targetPosition.copy(this.getEndEffectorPosition());
       this.targetActive = true;
-      this.target.visible = true;
+      this.target.visible = false;
       this.target.position.copy(this.targetPosition);
     }
   }
@@ -351,8 +369,17 @@ export class RobotArm {
     return dhToThree(this.kinematics.endPosition);
   }
 
+  getTerminalModel() {
+    return this.loadedModels.get("orgaoterminal.glb")?.model ?? null;
+  }
+
+  setTerminalSelected(selected) {
+    this.terminalSelected = Boolean(selected);
+  }
+
   getInteractiveObjects() {
-    return this.target.visible ? [this.endEffector, this.target] : [this.endEffector];
+    const terminal = this.getTerminalModel();
+    return terminal ? [terminal] : [];
   }
 
   getJointAnglesDegrees() {
@@ -572,7 +599,7 @@ export class RobotArm {
     this.updateModelTransforms();
 
     const points = this.getPhysicalPoints();
-    this.linkGeometry.setFromPoints(points);
+    this.linkGeometry.setFromPoints([...points, dhToThree(this.kinematics.endPosition)]);
     this.linkGeometry.computeBoundingSphere();
 
     this.jointMeshes.forEach((mesh, index) => {
@@ -586,13 +613,14 @@ export class RobotArm {
       gizmo.quaternion.setFromRotationMatrix(orientation);
     });
 
-    this.endEffector.position.copy(points[points.length - 1]);
+    this.endEffector.position.copy(dhToThree(this.kinematics.endPosition));
 
     if (!this.targetActive) {
       this.targetPosition.copy(this.endEffector.position);
     }
 
-    this.target.visible = this.targetActive;
+    // A mira de IK permanece logica, sem criar uma nova bolinha visivel.
+    this.target.visible = false;
     this.target.position.copy(this.targetPosition);
   }
 
@@ -602,12 +630,11 @@ export class RobotArm {
         return;
       }
 
-      const currentJointMatrix = dhMatrixToThree(
-        this.kinematics.jointMatrices[instance.jointIndex]
-      );
-      const inverseZeroJointMatrix = dhMatrixToThree(
-        this.zeroKinematics.jointMatrices[instance.jointIndex]
-      ).invert();
+      // O GLB terminal precisa seguir o pivot DEPOIS de d6 e da rotacao
+      // theta6; os elos anteriores seguem os pivots antes de cada junta.
+      const matrixField = instance.role === "tool" ? "cumulativeMatrices" : "jointMatrices";
+      const currentJointMatrix = dhMatrixToThree(this.kinematics[matrixField][instance.jointIndex]);
+      const inverseZeroJointMatrix = dhMatrixToThree(this.zeroKinematics[matrixField][instance.jointIndex]).invert();
       const modelMatrix = currentJointMatrix
         .multiply(inverseZeroJointMatrix)
         .multiply(instance.zeroWorldMatrix);

@@ -1,0 +1,405 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #444;
+  color: #edf1f5;
+  font-family: Arial, sans-serif;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #444;
+}
+
+#scene {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  cursor: grab;
+  touch-action: none;
+}
+
+#scene.is-dragging {
+  cursor: grabbing;
+}
+
+#scene.is-pickable {
+  cursor: pointer;
+}
+
+.control-display {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  width: min(380px, calc(100vw - 32px));
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(18, 21, 25, 0.92);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
+  color: #edf1f5;
+  padding: 12px;
+}
+
+.display-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 12px 0;
+}
+
+.display-section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.operation-mode {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+
+.operation-mode-label {
+  color: #aeb8c4;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  background: rgba(10, 12, 14, 0.72);
+}
+
+.segment-button {
+  min-width: 0;
+  min-height: 34px;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: #aeb8c4;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.segment-button:first-child {
+  border-left: 0;
+}
+
+.segment-button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #edf1f5;
+}
+
+.segment-button.is-active {
+  background: #dce5ef;
+  color: #15191d;
+  font-weight: 600;
+}
+
+.control-button,
+.panel-toggle,
+.text-button,
+input,
+select,
+textarea {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(10, 12, 14, 0.72);
+  color: #edf1f5;
+  font: inherit;
+}
+
+.control-button,
+.panel-toggle,
+.text-button {
+  cursor: pointer;
+}
+
+.control-button {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+.control-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.control-button:not(:disabled):hover,
+.panel-toggle:hover,
+.text-button:hover {
+  background: rgba(29, 34, 40, 0.94);
+}
+
+.text-button {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.section-header {
+  margin: 0;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.section-status {
+  color: #aeb8c4;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.robot-status,
+.param-label {
+  margin: 0;
+  color: #aeb8c4;
+  font-size: 12px;
+}
+
+.panel-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.panel-toggle-icon {
+  font-family: Consolas, monospace;
+}
+
+.section-content {
+  padding-top: 12px;
+}
+
+.collapsible-section.is-collapsed .section-content {
+  display: none;
+}
+
+.collapsible-section.is-collapsed .panel-toggle-icon {
+  transform: rotate(90deg);
+}
+
+.dh-joint {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 14px 0;
+}
+
+.dh-joint-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.dh-params {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.param-value {
+  display: block;
+  margin-top: 2px;
+  color: #f5f7fa;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+
+.matrix {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  font-family: Consolas, monospace;
+  font-size: 11px;
+}
+
+.matrix span {
+  min-width: 0;
+  padding: 6px 4px;
+  overflow: hidden;
+  background: rgba(10, 12, 14, 0.72);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mqtt-form {
+  display: grid;
+  gap: 10px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.form-field {
+  display: grid;
+  gap: 5px;
+  color: #aeb8c4;
+  font-size: 12px;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  padding: 0 10px;
+}
+
+.checkbox-field {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.trajectory-options {
+  display: grid;
+  gap: 10px;
+}
+
+.trajectory-options .section-title-row {
+  margin-bottom: 0;
+}
+
+.trajectory-options .checkbox-field {
+  color: #d4e0ea;
+  font-size: 12px;
+}
+
+.checkbox-field input {
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
+input,
+select {
+  min-height: 34px;
+}
+
+textarea {
+  min-height: 86px;
+  padding: 10px;
+  resize: vertical;
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.72;
+}
+
+.mqtt-publish-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.mqtt-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.mqtt-actions .section-status {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.mqtt-log-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.mqtt-log {
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(10, 12, 14, 0.72);
+  padding: 10px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+
+.mqtt-log-line {
+  overflow-wrap: anywhere;
+  color: #edf1f5;
+}
+
+.mqtt-log-line.muted {
+  color: #aeb8c4;
+}
+
+.mqtt-log-line.in {
+  color: #8ee6d2;
+}
+
+.mqtt-log-line.out {
+  color: #ffd27a;
+}
+
+.mqtt-log-line.error {
+  color: #ff9f9f;
+}
+
+@media (max-width: 760px) {
+  .control-display {
+    top: auto;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    max-height: 44vh;
+    padding: 12px;
+  }
+
+  .dh-params,
+  .form-grid,
+  .mqtt-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

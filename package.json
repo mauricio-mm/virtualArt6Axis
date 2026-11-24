@@ -1,0 +1,20 @@
+{
+  "name": "virtual-art-6-axis",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/build-offline.mjs",
+    "preview": "vite preview",
+    "test": "node --test",
+    "build:web": "vite build"
+  },
+  "dependencies": {
+    "mqtt": "^5.15.2",
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^8.2.0"
+  }
+}

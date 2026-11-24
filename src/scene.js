@@ -1,8 +1,8 @@
-import * as THREE from "three";
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { OutlinePass } from "three/examples/jsm/postprocessing/OutlinePass.js";
-import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import * as THREE from "../node_modules/three/build/three.module.js";
+import { EffectComposer } from "../node_modules/three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "../node_modules/three/examples/jsm/postprocessing/RenderPass.js";
+import { OutlinePass } from "../node_modules/three/examples/jsm/postprocessing/OutlinePass.js";
+import { OutputPass } from "../node_modules/three/examples/jsm/postprocessing/OutputPass.js";
 import { createSceneCamera, resizeSceneCamera } from "./camera.js";
 import { createGrid } from "./grid.js";
 import { RobotArm } from "./robot.js";

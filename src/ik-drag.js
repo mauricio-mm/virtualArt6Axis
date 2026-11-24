@@ -1,4 +1,4 @@
-import * as THREE from "three";
+import * as THREE from "../node_modules/three/build/three.module.js";
 
 const pointer = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();

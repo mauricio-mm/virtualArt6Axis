@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ThreeJS Canvas</title>
     <link rel="stylesheet" href="style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./node_modules/three/build/three.module.js"
+        }
+      }
+    </script>
   </head>
   <body>
     <main class="app-shell">
@@ -97,22 +104,21 @@
               <label class="form-field">
                 <span>Protocolo</span>
                 <select id="mqtt-protocol">
-                  <option value="ws">WebSocket (WS)</option>
-                  <option value="wss" selected>WebSocket seguro (WSS)</option>
+                  <option value="mqtt">MQTT</option>
+                  <option value="mqtts">MQTTS (TLS)</option>
                 </select>
               </label>
 
               <label class="form-field">
                 <span>Porta</span>
-                <input id="mqtt-port" type="number" value="8084" min="1" max="65535" />
+                <input id="mqtt-port" type="number" value="1883" min="1" max="65535" />
               </label>
             </div>
 
-            <label class="form-field">
-              <span>Caminho WebSocket</span>
-              <input id="mqtt-ws-path" type="text" value="/mqtt" autocomplete="off" />
+            <label class="form-field checkbox-field">
+              <input id="mqtt-reject-unauthorized" type="checkbox" checked />
+              <span>Validar certificado TLS do broker</span>
             </label>
-            <p class="section-status">Conexao direta pelo navegador: use WS (8083) ou WSS (8084). Portas 1883/8883 nao funcionam aqui.</p>
 
             <label class="form-field">
               <span>Client ID</span>

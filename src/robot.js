@@ -1,5 +1,5 @@
-import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import * as THREE from "../node_modules/three/build/three.module.js";
+import { GLTFLoader } from "../node_modules/three/examples/jsm/loaders/GLTFLoader.js";
 import {
   computeForwardKinematics,
   createJointState,
@@ -266,7 +266,7 @@ export class RobotArm {
       const { fileName } = spec;
 
       loader.load(
-        window.__ROBOT_GLB_URLS?.[fileName] || `${import.meta.env.BASE_URL}models/${fileName}`,
+        `./src/models/${fileName}`,
         (gltf) => {
           const model = gltf.scene;
           model.name = fileName.replace(".glb", "");

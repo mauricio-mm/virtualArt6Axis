@@ -3,6 +3,7 @@ import {
   formatJointAngles,
   formatJointAnglesPayload,
   parseJointAnglesMessage,
+  calibrateSensorAngles,
 } from "./joint-message.js";
 import { createMqttPanel } from "./mqtt.js";
 import { createOperationModeControl, operationModes } from "./operation-mode.js";
@@ -24,9 +25,9 @@ export function createUi({ robot }) {
       robot.setWorkspaceVisible(false);
     },
     onMessage({ payload }) {
-      const angles = parseJointAnglesMessage(payload);
+      const rawAngles = parseJointAnglesMessage(payload);
 
-      if (!angles) {
+      if (!rawAngles) {
         return null;
       }
 
@@ -37,14 +38,14 @@ export function createUi({ robot }) {
         };
       }
 
-      // Cada mensagem MQTT valida registra um ponto no espaco 3D,
-      // sem depender de um campo adicional "point" ou "set".
+      const angles = calibrateSensorAngles(rawAngles);
+
       const pointMm = robot.addTelemetryPoint(angles);
       robot.setJointAnglesDegrees(angles);
       updateRobot();
 
       return {
-        message: `Trajetoria FK iniciada: ${formatJointAngles(angles)} | ponto criado em ${formatPositionMm(pointMm)}`,
+        message: `Original: ${formatJointAngles(rawAngles)} | Calibrado: ${formatJointAngles(angles)} | Ponto: ${formatPositionMm(pointMm)}`,
         type: "muted",
       };
     },

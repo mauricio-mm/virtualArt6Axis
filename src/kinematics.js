@@ -4,19 +4,18 @@ const DEG_TO_RAD = Math.PI / 180;
 const identityMatrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 export const DH_TO_THREE_SCALE = 0.01;
 export const THREE_TO_DH_SCALE = 1 / DH_TO_THREE_SCALE;
-export const J3_J4_MM = 252.5;
+export const J3_J4_MM = 255.3;
 export const J4_J5_MM = 158.9;
 export const J5_J6_MM = 152.0;
-export const TOOL_LENGTH_MM = 85.0;
+export const TOOL_LENGTH_MM = 88.8;
 export const dhDefinitions = [
-  { name: "J1", theta: 0, thetaOffset: 0, d: 229.4, a: 0, alpha: 90, min: -180, max: 180 },
-  { name: "J2", theta: 0, thetaOffset: 0, d: 0, a: 250.2, alpha: 0, min: -180, max: 180 },
-  { name: "J3", theta: 0, thetaOffset: 90, d: 0, a: 0, alpha: 90, min: -180, max: 180 },
-  { name: "J4", theta: 0, thetaOffset: 0, d: J3_J4_MM + J4_J5_MM, a: 0, alpha: -90, min: -180, max: 180 },
-  { name: "J5", theta: 0, thetaOffset: 0, d: 0, a: 0, alpha: 90, min: -180, max: 180 },
-  { name: "J6", theta: 0, thetaOffset: 0, d: J5_J6_MM, a: 0, alpha: 0, min: -180, max: 180 },
+  { name: "J1", theta: 0, thetaOffset: 0,   d: 265.8, a: 0,   alpha: 90,  min: -180, max: 180 },
+  { name: "J2", theta: 0, thetaOffset: 0,   d: 0,     a: 256, alpha: 0,   min: -180, max: 180 },
+  { name: "J3", theta: 0, thetaOffset: 90,  d: 0,     a: 0,   alpha: 90,  min: -180, max: 180 },
+  { name: "J4", theta: 0, thetaOffset: -60, d: 417.1, a: 0,   alpha: -90, min: -180, max: 180 },
+  { name: "J5", theta: 0, thetaOffset: 0,   d: 0,     a: 0,   alpha: 90,  min: -180, max: 180 },
+  { name: "J6", theta: 0, thetaOffset: 0,   d: 155.3, a: 0,   alpha: 0,   min: -180, max: 180 },
 ];
-
 export const workspaceRadiusMm = dhDefinitions.reduce(
   (radius, joint) => radius + Math.hypot(joint.d, joint.a),
   0

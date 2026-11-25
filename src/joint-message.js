@@ -76,3 +76,11 @@ export function formatJointAnglesPayload(angles) {
 
   return `{${channels.join(", ")}}`;
 }
+
+//OFFSET de calibragem testado quando o braço ficou extendido a 90° ou proximo disso para calcular corretamente o DHT
+const sensorOffsets = [0, -17.47, -115.01, 0, -107.25, 0];
+const sensorDirections = [1, 1, 1, 1, 1, 1];
+
+export function calibrateSensorAngles(angles) {
+  return angles.map((angle, i) => angle * sensorDirections[i] + sensorOffsets[i]);
+}

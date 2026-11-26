@@ -7,7 +7,10 @@ export const THREE_TO_DH_SCALE = 1 / DH_TO_THREE_SCALE;
 export const J3_J4_MM = 255.3;
 export const J4_J5_MM = 158.9;
 export const J5_J6_MM = 152.0;
-export const TOOL_LENGTH_MM = 88.8;
+export const TCP_X_MM = 0;
+export const TCP_Y_MM = 0;
+export const TCP_Z_MM = 88.8;
+export const TOOL_LENGTH_MM = Math.hypot(TCP_X_MM, TCP_Y_MM, TCP_Z_MM);
 export const dhDefinitions = [
   { name: "J1", theta: 0, thetaOffset: 0,   d: 265.8, a: 0,   alpha: 90,  min: -180, max: 180 },
   { name: "J2", theta: 0, thetaOffset: 0,   d: 0,     a: 256, alpha: 0,   min: -180, max: 180 },
@@ -108,9 +111,13 @@ export function computeForwardKinematics(joints) {
     positions.push(transformOrigin(transform));
   }
 
-  // Matriz do TCP separada da sexta junta: a ponta esta 40 mm a frente
-  // no eixo z6. A sexta junta gira o orgao terminal sem mover o TCP.
-  const tcpMatrix = multiplyMatrix(transform, createDhMatrix(0, TOOL_LENGTH_MM, 0, 0));
+  // Deslocamento do TCP no referencial local da sexta junta (mm).
+  const tcpMatrix = multiplyMatrix(transform, [
+    1, 0, 0, TCP_X_MM,
+    0, 1, 0, TCP_Y_MM,
+    0, 0, 1, TCP_Z_MM,
+    0, 0, 0, 1
+  ]);
   return {
     axes,
     cumulativeMatrices,

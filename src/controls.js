@@ -9,6 +9,7 @@ const minElevation = -Math.PI / 2 + 0.08;
 const maxElevation = Math.PI / 2 - 0.08;
 const minDistance = 2.5;
 const maxDistance = 60;
+const movementKeys = new Set(["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"]);
 
 function applyCamera(camera, target, orbit) {
   orbit.elevation = THREE.MathUtils.clamp(orbit.elevation, minElevation, maxElevation);
@@ -43,7 +44,7 @@ export function createCameraControls(camera, canvas, options = {}) {
   };
   const pressedKeys = new Set();
   const pointer = {
-    active: false,
+    id: null,
     mode: "rotate",
     x: 0,
     y: 0,
@@ -51,7 +52,7 @@ export function createCameraControls(camera, canvas, options = {}) {
 
   function rotate(deltaX, deltaY) {
     orbit.azimuth -= deltaX * 0.006;
-    orbit.elevation -= deltaY * 0.006;
+    orbit.elevation += deltaY * 0.006;
     applyCamera(camera, target, orbit);
   }
 
@@ -70,15 +71,40 @@ export function createCameraControls(camera, canvas, options = {}) {
     applyCamera(camera, target, orbit);
   }
 
+  function zoom(delta) {
+    orbit.radius *= Math.exp(THREE.MathUtils.clamp(delta, -4, 4));
+    applyCamera(camera, target, orbit);
+  }
+
+  function stopPointer(event) {
+    if (pointer.id === null || (event && event.pointerId !== pointer.id)) return;
+
+    const id = pointer.id;
+    pointer.id = null;
+    canvas.classList.remove("is-dragging");
+    if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+  }
+
+  function resetControls() {
+    pressedKeys.clear();
+    stopPointer();
+  }
+
   canvas.addEventListener("pointerdown", (event) => {
+    if (pointer.id !== null || ![0, 1].includes(event.button)) return;
     canvas.focus({ preventScroll: true });
 
-    if (options.onPointerDown?.(event)) {
+    // Botao esquerdo exclusivamente para selecao e manipulacao do robo.
+    if (event.button === 0) {
+      options.onPointerDown?.(event);
       return;
     }
 
-    pointer.active = true;
-    pointer.mode = event.button === 1 || event.button === 2 || event.shiftKey ? "pan" : "rotate";
+    // Blender: MMB = orbitar, Shift+MMB = pan, Ctrl+MMB = zoom.
+    if (canvas.hasPointerCapture(event.pointerId)) return;
+    event.preventDefault();
+    pointer.id = event.pointerId;
+    pointer.mode = event.shiftKey ? "pan" : event.ctrlKey ? "zoom" : "rotate";
     pointer.x = event.clientX;
     pointer.y = event.clientY;
     canvas.classList.add("is-dragging");
@@ -86,55 +112,58 @@ export function createCameraControls(camera, canvas, options = {}) {
   });
 
   canvas.addEventListener("pointermove", (event) => {
-    if (!pointer.active) {
+    if (pointer.id !== event.pointerId) return;
+    if ((event.buttons & 4) === 0) {
+      stopPointer(event);
       return;
     }
 
     const deltaX = event.clientX - pointer.x;
     const deltaY = event.clientY - pointer.y;
 
-    if (pointer.mode === "pan") {
-      pan(deltaX, deltaY);
-    } else {
-      rotate(deltaX, deltaY);
-    }
+    if (pointer.mode === "pan") pan(deltaX, deltaY);
+    else if (pointer.mode === "zoom") zoom(deltaY * 0.01);
+    else rotate(deltaX, deltaY);
 
     pointer.x = event.clientX;
     pointer.y = event.clientY;
   });
 
-  canvas.addEventListener("pointerup", (event) => {
-    if (!pointer.active) {
-      return;
-    }
-
-    pointer.active = false;
-    canvas.classList.remove("is-dragging");
-
-    if (canvas.hasPointerCapture(event.pointerId)) {
-      canvas.releasePointerCapture(event.pointerId);
-    }
-  });
-
-  canvas.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
+  canvas.addEventListener("pointerup", stopPointer);
+  canvas.addEventListener("pointercancel", stopPointer);
+  canvas.addEventListener("lostpointercapture", stopPointer);
+  canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  canvas.addEventListener("auxclick", (event) => {
+    if (event.button === 1) event.preventDefault();
   });
 
   canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
-    orbit.radius *= event.deltaY > 0 ? 1.1 : 0.9;
-    applyCamera(camera, target, orbit);
+    const pixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? canvas.clientHeight : 1);
+    zoom(pixels * 0.0015);
+  }, { passive: false });
+
+  // Atalhos locais: nenhum evento de digitacao dos campos MQTT chega aqui.
+  canvas.addEventListener("keydown", (event) => {
+    const key = event.key.toLowerCase();
+    if (document.activeElement !== canvas || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || !movementKeys.has(key)) return;
+    event.preventDefault();
+    pressedKeys.add(key);
   });
 
-  window.addEventListener("keydown", (event) => {
-    pressedKeys.add(event.key.toLowerCase());
-  });
-
-  window.addEventListener("keyup", (event) => {
-    pressedKeys.delete(event.key.toLowerCase());
+  window.addEventListener("keyup", (event) => pressedKeys.delete(event.key.toLowerCase()));
+  canvas.addEventListener("blur", resetControls);
+  window.addEventListener("blur", resetControls);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) resetControls();
   });
 
   function update(deltaTime) {
+    if (document.activeElement !== canvas || document.hidden) {
+      pressedKeys.clear();
+      return;
+    }
+    if (pressedKeys.size === 0) return;
     panDelta.set(0, 0, 0);
     forward.subVectors(target, camera.position);
     forward.z = 0;

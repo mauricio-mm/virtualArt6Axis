@@ -77,11 +77,16 @@ export function formatJointAnglesPayload(angles) {
   return `{${channels.join(", ")}}`;
 }
 
-//OFFSET de calibragem testado quando o braço ficou extendido a 90° ou proximo disso para calcular corretamente o DHT
+// Calibracao validada experimentalmente com a base de 75 mm e a mesa plana.
 const sensorOffsets = [0, -4.278504, -127.387871, -12.120279, -101.581762, 0];
 const sensorDirections = [1, 1, 1, 1, 1, 1];
 const sensorGains = [1.015, 1.073880, 0.904659, 1.272545, 1.084454, 1];
 
 export function calibrateSensorAngles(angles) {
   return angles.map((angle, i) => angle * sensorDirections[i] * sensorGains[i] + sensorOffsets[i]);
+}
+
+// Converte os angulos internos do robo para o mesmo referencial dos canais MQTT.
+export function uncalibrateSensorAngles(angles) {
+  return angles.map((angle, i) => (angle - sensorOffsets[i]) / (sensorDirections[i] * sensorGains[i]));
 }

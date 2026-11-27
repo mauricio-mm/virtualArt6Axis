@@ -4,6 +4,7 @@ import {
   formatJointAnglesPayload,
   parseJointAnglesMessage,
   calibrateSensorAngles,
+  uncalibrateSensorAngles,
 } from "./joint-message.js";
 import { createMqttPanel } from "./mqtt.js";
 import { createOperationModeControl, operationModes } from "./operation-mode.js";
@@ -74,7 +75,8 @@ export function createUi({ robot }) {
     }
 
     const angles = robot.getJointAnglesDegrees();
-    const payload = formatJointAnglesPayload(angles);
+    // O receptor aplica a calibracao; transmitir os canais no referencial bruto.
+    const payload = formatJointAnglesPayload(uncalibrateSensorAngles(angles));
 
     mqttPanel.publish(payload);
   });
